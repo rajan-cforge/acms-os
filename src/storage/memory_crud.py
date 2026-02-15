@@ -27,7 +27,7 @@ from src.storage.database import get_session, get_db_pool
 from src.storage.encryption import get_global_encryption_manager
 from src.storage.weaviate_client import WeaviateClient
 from src.storage.ollama_client import get_global_ollama_client
-from src.embeddings.openai_embeddings import OpenAIEmbeddings
+import os
 
 # PHASE 0: Data Flow Audit (Dec 2025)
 from src.audit.logger import get_audit_logger
@@ -78,7 +78,28 @@ class MemoryCRUD:
             print(f"[MemoryCRUD] Ollama not available: {e}")
             self.ollama = None  # Will use OpenAI only
 
-        self.openai_embeddings = openai_embeddings or OpenAIEmbeddings()
+        # Initialize embeddings: prefer Ollama (free), fall back to OpenAI if key is set
+        self.embeddings = None
+        self.openai_embeddings = None
+
+        # Try Ollama embeddings first (default for open-source)
+        if os.getenv("OPENAI_API_KEY"):
+            try:
+                from src.embeddings.openai_embeddings import OpenAIEmbeddings
+                self.openai_embeddings = openai_embeddings or OpenAIEmbeddings()
+                self.embeddings = self.openai_embeddings
+                print("[MemoryCRUD] Using OpenAI embeddings (1536d)")
+            except Exception as e:
+                print(f"[MemoryCRUD] OpenAI embeddings failed: {e}")
+
+        if self.embeddings is None:
+            try:
+                from src.embeddings.ollama_embeddings import OllamaEmbeddings
+                self.embeddings = OllamaEmbeddings()
+                print("[MemoryCRUD] Using Ollama embeddings (768d)")
+            except Exception as e:
+                print(f"[MemoryCRUD] Ollama embeddings failed: {e}")
+                raise ValueError("No embedding provider available. Set OPENAI_API_KEY or ensure Ollama is running.")
         self.crs = crs_engine or SimpleCRS()
         self.privacy = privacy_detector or get_privacy_detector()
 
@@ -210,7 +231,7 @@ class MemoryCRUD:
 
             # Generate embedding (OpenAI 1536d - Dec 2025)
             embedding_start = time.time()
-            embedding = self.openai_embeddings.generate_embedding(content)
+            embedding = self.embeddings.generate_embedding(content)
             embedding_latency = (time.time() - embedding_start) * 1000
 
             # Store vector in Weaviate (ACMS_Raw_v1 unified collection - Dec 2025)
@@ -413,7 +434,7 @@ class MemoryCRUD:
                 memory.encrypted_content = self.encryption.encrypt_to_base64(content)
 
                 # Re-generate embedding (OpenAI 1536d)
-                embedding = self.openai_embeddings.generate_embedding(content)
+                embedding = self.embeddings.generate_embedding(content)
 
                 # Update Weaviate
                 self.weaviate.update_vector(
@@ -671,7 +692,7 @@ class MemoryCRUD:
             List[dict]: Search results with CRS scores and distances
         """
         # Generate query embedding (OpenAI 1536d - upgraded Dec 2025)
-        query_embedding = self.openai_embeddings.generate_embedding(query)
+        query_embedding = self.embeddings.generate_embedding(query)
 
         # Search Weaviate unified collection (get more results for filtering)
         search_limit = limit * 3 if privacy_filter else limit * 2
