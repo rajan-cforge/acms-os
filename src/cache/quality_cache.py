@@ -19,7 +19,7 @@ from enum import Enum
 from typing import Optional, Dict, Any, List
 
 from src.storage.weaviate_client import WeaviateClient
-from src.embeddings.openai_embeddings import OpenAIEmbeddings
+from src.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ class QualityCache:
     def __init__(self):
         """Initialize quality cache."""
         self.weaviate = WeaviateClient()
-        self.embeddings = OpenAIEmbeddings()
+        self.embeddings = get_embeddings()
         self.collection_name = self.COLLECTION_NAME
 
         # Stats tracking

@@ -32,7 +32,7 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta, timezone
 
 from src.storage.weaviate_client import WeaviateClient
-from src.embeddings.openai_embeddings import OpenAIEmbeddings
+from src.embeddings import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class SemanticCache:
             collection_name: Weaviate collection name
         """
         self.weaviate = WeaviateClient()
-        self.embeddings = OpenAIEmbeddings()
+        self.embeddings = get_embeddings()
         self.threshold = similarity_threshold
         self.ttl_seconds = ttl_hours * 3600
         self.collection_name = collection_name
