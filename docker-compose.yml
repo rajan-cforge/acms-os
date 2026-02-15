@@ -77,7 +77,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    image: acms-api:latest
     container_name: ${ACMS_PREFIX:-acms}_api
     ports:
       - "40080:40080"
