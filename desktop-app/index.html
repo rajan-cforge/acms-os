@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.plaid.com; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:40080 https://*.plaid.com; frame-src 'self' https://*.plaid.com">
+    <title>ACMS - Adaptive Context Memory System</title>
+
+    <!-- Sprint 1: Design System Foundation -->
+    <link rel="stylesheet" href="src/renderer/styles/design-tokens.css">
+    <link rel="stylesheet" href="src/renderer/styles/base.css">
+    <link rel="stylesheet" href="src/renderer/styles/chat.css">
+    <!-- Active Second Brain (Jan 2026) -->
+    <link rel="stylesheet" href="src/renderer/styles/active-brain.css">
+    <!-- Expandable Card Component -->
+    <link rel="stylesheet" href="src/renderer/styles/expandable-card.css">
+    <!-- Memory Timeline (Sprint 2) -->
+    <link rel="stylesheet" href="src/renderer/styles/memory-timeline.css">
+    <!-- Knowledge Browser (Sprint 3) -->
+    <link rel="stylesheet" href="src/renderer/styles/knowledge-browser.css">
+    <!-- Portfolio Constitution (Sprint 4) -->
+    <link rel="stylesheet" href="src/renderer/styles/portfolio-constitution.css">
+    <!-- Reports Dashboard (Sprint 5) -->
+    <link rel="stylesheet" href="src/renderer/styles/reports-dashboard.css">
+    <!-- Navigation & Settings (Sprint 6) -->
+    <link rel="stylesheet" href="src/renderer/styles/navigation.css">
+
+    <!-- Plaid Link SDK (Phase 2: Financial Constitution) -->
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+</head>
+<body>
+    <!-- Root container - All UI rendered via JavaScript -->
+    <div id="root">
+        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; color: #4CAF50;">
+            <div style="text-align: center;">
+                <h1 style="font-size: 48px; margin-bottom: 16px;">ACMS</h1>
+                <p style="color: #999;">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Week 5 Day 2: Modular JavaScript Architecture -->
+    <script>
+        // Bootstrap the application
+        require('./src/renderer/renderer.js');
+    </script>
+</body>
+</html>

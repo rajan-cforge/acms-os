@@ -1,0 +1,6 @@
+{
+  "name": "acms-oauth-handler",
+  "version": "1.0.0",
+  "description": "Plaid OAuth callback handler for ACMS desktop app",
+  "private": true
+}

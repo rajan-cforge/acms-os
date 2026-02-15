@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "scan_results": {
+    "table": "memory_items",
+    "total_scanned": 100,
+    "items_with_pii": 0,
+    "pii_by_type": {
+      "SSN": 0,
+      "CREDIT_CARD": 0,
+      "EMAIL": 0,
+      "PHONE": 0,
+      "IP_ADDRESS": 0
+    },
+    "percentage": 0.0
+  }
+}

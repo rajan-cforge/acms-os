@@ -1,0 +1,193 @@
+services:
+  # PostgreSQL 16+ - Metadata storage
+  postgres:
+    image: postgres:16-alpine
+    container_name: acms_postgres
+    environment:
+      POSTGRES_DB: acms
+      POSTGRES_USER: acms
+      POSTGRES_PASSWORD: acms_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "40432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - acms_network
+    restart: unless-stopped
+
+  # Redis 7.0+ - Caching layer
+  redis:
+    image: redis:7-alpine
+    container_name: acms_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "40379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - acms_network
+    restart: unless-stopped
+
+  # Weaviate v4 - Vector database (NEW dedicated instance for ACMS)
+  weaviate:
+    image: semitechnologies/weaviate:1.27.4
+    container_name: acms_weaviate
+    ports:
+      - "40480:8080"
+      - "40481:50051"  # gRPC
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'  # We use Ollama for embeddings
+      CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    # Health check disabled: curl not available in Weaviate image
+    # Service is monitored via API health endpoint
+    networks:
+      - acms_network
+    restart: unless-stopped
+
+  # Ollama - Local LLM inference (Docker container)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: acms_ollama
+    ports:
+      - "40434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - acms_network
+    restart: unless-stopped
+
+  # ACMS API Server - FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: acms-api:latest
+    container_name: acms_api
+    ports:
+      - "40080:40080"
+    environment:
+      # Database connection (using service names for internal network)
+      DATABASE_URL: postgresql://acms:acms_password@postgres:5432/acms
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: acms
+      POSTGRES_USER: acms
+      POSTGRES_PASSWORD: acms_password
+
+      # Database connection (ACMS-prefixed for src/storage/database.py)
+      ACMS_DB_HOST: postgres
+      ACMS_DB_PORT: 5432
+      ACMS_DB_NAME: acms
+      ACMS_DB_USER: acms
+      ACMS_DB_PASSWORD: acms_password
+
+      # Redis connection
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # Weaviate connection
+      WEAVIATE_HOST: weaviate
+      WEAVIATE_PORT: 8080
+      WEAVIATE_GRPC_PORT: 50051
+
+      # Ollama connection (Docker container)
+      OLLAMA_HOST: ollama
+      OLLAMA_PORT: 11434
+      OLLAMA_MODEL: llama3.2:latest
+      OLLAMA_BASE_URL: http://ollama:11434
+
+      # API Keys (pass from host environment or .env)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+
+      # Gmail OAuth (Phase 1A)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:40080/api/gmail/callback}
+      ACMS_TOKEN_SECRET: ${ACMS_TOKEN_SECRET}
+
+      # Plaid Integration (Phase 2: Financial Constitution)
+      PLAID_CLIENT_ID: ${PLAID_CLIENT_ID}
+      PLAID_SECRET: ${PLAID_SECRET}
+      PLAID_ENV: ${PLAID_ENV:-sandbox}
+      PLAID_ENCRYPTION_KEY: ${PLAID_ENCRYPTION_KEY}
+
+      # Phase 2: Query Augmentation Configuration
+      ENABLE_QUERY_AUGMENTATION: ${ENABLE_QUERY_AUGMENTATION:-false}
+      LLM_PROVIDER: ${LLM_PROVIDER:-chatgpt}
+      LLM_MODEL: ${LLM_MODEL:-}
+
+      # Web Search Configuration (Tavily)
+      ENABLE_WEB_SEARCH: ${ENABLE_WEB_SEARCH:-true}
+      SEARCH_MAX_RESULTS: ${SEARCH_MAX_RESULTS:-5}
+      SEARCH_CACHE_TTL_SECONDS: ${SEARCH_CACHE_TTL_SECONDS:-3600}
+
+      # Environment
+      ENVIRONMENT: production
+      PYTHONUNBUFFERED: 1
+
+    volumes:
+      # Mount source code for development (remove in production)
+      - ./src:/app/src:ro
+      - ./alembic:/app/alembic:ro
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      weaviate:
+        condition: service_started  # No health check configured
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:40080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - acms_network
+
+    restart: unless-stopped
+
+    # Resource limits for production stability
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+networks:
+  acms_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  weaviate_data:
+    driver: local
+  ollama_data:
+    driver: local

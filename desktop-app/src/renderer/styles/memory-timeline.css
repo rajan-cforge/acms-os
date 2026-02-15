@@ -1,0 +1,328 @@
+/* ==========================================================================
+   Memory Timeline Styles
+   Sprint 2: Memory Clustering - Frontend
+
+   Uses design tokens from design-tokens.css
+   ========================================================================== */
+
+/* ==========================================================================
+   CONTAINER
+   ========================================================================== */
+
+.memory-timeline-container {
+    padding: var(--space-6);
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   SKELETON LOADING
+   ========================================================================== */
+
+.timeline-skeleton {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-header {
+    height: 80px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-5);
+}
+
+.skeleton-card {
+    height: 100px;
+    background: var(--bg-surface);
+    border-radius: var(--card-radius);
+    margin-bottom: var(--space-3);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ==========================================================================
+   SEARCH CONTAINER
+   ========================================================================== */
+
+.search-container {
+    min-width: 280px;
+}
+
+.search-container .input {
+    width: 100%;
+}
+
+/* ==========================================================================
+   CLUSTER FILTER
+   ========================================================================== */
+
+.cluster-filter-container {
+    display: flex;
+    align-items: center;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-x: auto;
+}
+
+.cluster-pills {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: nowrap;
+}
+
+.cluster-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-3);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full);
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out);
+}
+
+.cluster-pill:hover {
+    background: var(--bg-active);
+    color: var(--text-primary);
+}
+
+.cluster-pill.active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: var(--text-inverse);
+}
+
+/* ==========================================================================
+   TIMELINE CONTENT
+   ========================================================================== */
+
+.timeline-content {
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+    padding-right: var(--space-2);
+}
+
+/* ==========================================================================
+   DATE HEADERS
+   ========================================================================== */
+
+.timeline-date-header {
+    display: flex;
+    align-items: center;
+    margin: var(--space-5) 0 var(--space-3);
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.timeline-date-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
+    margin-left: var(--space-3);
+}
+
+.timeline-date-header:first-child {
+    margin-top: var(--space-3);
+}
+
+/* ==========================================================================
+   MEMORY TIMELINE CARD
+   ========================================================================== */
+
+.memory-timeline-card {
+    margin-bottom: var(--space-3);
+    position: relative;
+}
+
+.memory-timeline-card.has-cluster::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-purple);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+/* ==========================================================================
+   MEMORY PREVIEW (Collapsed State)
+   ========================================================================== */
+
+.memory-preview {
+    padding-right: var(--space-4);
+}
+
+.memory-question {
+    font-size: var(--text-body);
+    color: var(--text-primary);
+    line-height: var(--line-height-normal);
+    margin-bottom: var(--space-2);
+}
+
+.memory-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--text-small);
+}
+
+.memory-time {
+    color: var(--text-tertiary);
+}
+
+.cluster-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-2);
+    background: rgba(147, 51, 234, 0.15);
+    color: var(--accent-purple);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+}
+
+.agent-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-2);
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--accent-blue);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+}
+
+/* ==========================================================================
+   MEMORY FULL (Expanded State)
+   ========================================================================== */
+
+.memory-full {
+    padding-top: var(--space-3);
+}
+
+.memory-section {
+    margin-bottom: var(--space-4);
+}
+
+.section-label {
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-2);
+}
+
+.memory-question-full {
+    font-size: var(--text-body);
+    color: var(--text-primary);
+    line-height: var(--line-height-relaxed);
+    background: var(--bg-overlay);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+}
+
+.memory-answer {
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+    line-height: var(--line-height-relaxed);
+}
+
+.memory-answer pre {
+    background: var(--bg-overlay);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin: var(--space-3) 0;
+}
+
+.memory-answer code {
+    font-family: var(--font-mono);
+    font-size: var(--text-small);
+    background: var(--bg-overlay);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.memory-answer pre code {
+    background: none;
+    padding: 0;
+}
+
+/* ==========================================================================
+   RELATED MEMORIES
+   ========================================================================== */
+
+.related-memories {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.related-memory-item {
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+    border-left: 2px solid var(--accent-purple);
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-out);
+}
+
+.related-memory-item:hover {
+    background: var(--bg-active);
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .memory-timeline-container {
+        padding: var(--space-4);
+    }
+
+    .view-header {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .search-container {
+        width: 100%;
+        min-width: unset;
+    }
+
+    .cluster-filter-container {
+        flex-wrap: wrap;
+    }
+
+    .timeline-content {
+        max-height: calc(100vh - 350px);
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .timeline-skeleton,
+    .cluster-pill,
+    .related-memory-item {
+        transition: none;
+    }
+}

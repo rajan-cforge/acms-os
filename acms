@@ -1,0 +1,19 @@
+#!/bin/bash
+# ACMS CLI Wrapper Script
+# Automatically activates venv and loads environment variables
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Load environment variables if .env exists
+if [ -f ".env" ]; then
+    source .env
+fi
+
+# Activate virtual environment
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+fi
+
+# Run ACMS CLI with all arguments
+python3 -m src.scripts.acms_cli "$@"

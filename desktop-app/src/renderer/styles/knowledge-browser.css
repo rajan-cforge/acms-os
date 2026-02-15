@@ -1,0 +1,684 @@
+/* ==========================================================================
+   Knowledge Browser Styles
+   Sprint 3: Knowledge Consolidation - Frontend
+
+   Uses design tokens from design-tokens.css
+   ========================================================================== */
+
+/* ==========================================================================
+   LAYOUT
+   ========================================================================== */
+
+.knowledge-browser {
+    display: flex;
+    height: 100%;
+    gap: var(--space-4);
+}
+
+.knowledge-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--bg-surface);
+    border-radius: var(--card-radius);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.knowledge-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* ==========================================================================
+   SIDEBAR
+   ========================================================================== */
+
+.sidebar-header {
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+.domain-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-2);
+}
+
+.domain-node {
+    margin-bottom: var(--space-1);
+}
+
+.domain-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-out);
+}
+
+.domain-item:hover {
+    background: var(--bg-active);
+}
+
+.domain-item.selected {
+    background: var(--accent-green);
+    color: var(--text-inverse);
+}
+
+.domain-icon {
+    font-size: var(--text-body);
+}
+
+.domain-name {
+    flex: 1;
+    font-size: var(--text-small);
+}
+
+.domain-count {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+    background: var(--bg-overlay);
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+}
+
+.domain-item.selected .domain-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-inverse);
+}
+
+.domain-children {
+    margin-left: var(--space-2);
+}
+
+.sidebar-stats {
+    padding: var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-overlay);
+}
+
+.stats-section {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+    text-align: center;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.stat-value {
+    font-size: var(--text-heading);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+}
+
+.stat-label {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   HEADER & FILTERS
+   ========================================================================== */
+
+.knowledge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: var(--space-4);
+    gap: var(--space-4);
+}
+
+.knowledge-title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+}
+
+.knowledge-title h2 {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: var(--font-weight-bold);
+}
+
+.knowledge-count {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.knowledge-actions {
+    display: flex;
+    gap: var(--space-3);
+}
+
+.knowledge-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--space-4);
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.filter-checkbox input {
+    accent-color: var(--accent-green);
+}
+
+.confidence-filter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+
+.confidence-filter label {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.confidence-filter input[type="range"] {
+    width: 100px;
+    accent-color: var(--accent-green);
+}
+
+#confidenceValue {
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    min-width: 36px;
+}
+
+/* ==========================================================================
+   KNOWLEDGE LIST
+   ========================================================================== */
+
+.knowledge-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* ==========================================================================
+   KNOWLEDGE CARD
+   ========================================================================== */
+
+.knowledge-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    padding: var(--space-4);
+    transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.knowledge-card:hover {
+    border-color: var(--border-default);
+}
+
+.knowledge-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-3);
+}
+
+.knowledge-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+}
+
+.knowledge-type-badge.fact {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--accent-blue);
+}
+
+.knowledge-type-badge.preference {
+    background: rgba(255, 193, 7, 0.15);
+    color: #FFA000;
+}
+
+.knowledge-type-badge.definition {
+    background: rgba(156, 39, 176, 0.15);
+    color: var(--accent-purple);
+}
+
+.knowledge-type-badge.procedure {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--accent-green);
+}
+
+.confidence-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-small);
+}
+
+.confidence-dots {
+    letter-spacing: 2px;
+}
+
+.confidence-value {
+    font-weight: var(--font-weight-medium);
+}
+
+.knowledge-content {
+    font-size: var(--text-body);
+    color: var(--text-primary);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-3);
+}
+
+.knowledge-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.knowledge-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.domain-tag {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+}
+
+.source-count {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+.verified-badge {
+    font-size: var(--text-micro);
+    color: var(--accent-green);
+    font-weight: var(--font-weight-medium);
+}
+
+.knowledge-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-sm {
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-micro);
+}
+
+.btn-success {
+    background: var(--accent-green);
+    color: var(--text-inverse);
+}
+
+.btn-success:hover {
+    background: #45a049;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    background: var(--bg-active);
+    color: var(--text-primary);
+}
+
+.btn-danger {
+    color: var(--accent-red);
+}
+
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+/* ==========================================================================
+   DETAILS MODAL
+   ========================================================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background: var(--bg-surface);
+    border-radius: var(--card-radius);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-xl);
+}
+
+.knowledge-details-modal {
+    max-width: 700px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: var(--text-heading);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: var(--space-1);
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+}
+
+.modal-footer {
+    padding: var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+}
+
+.detail-section {
+    margin-bottom: var(--space-4);
+}
+
+.detail-section label {
+    display: block;
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-2);
+}
+
+.detail-content {
+    font-size: var(--text-body);
+    color: var(--text-primary);
+    line-height: var(--line-height-relaxed);
+    background: var(--bg-overlay);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+}
+
+.detail-row {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.detail-row .detail-section {
+    flex: 1;
+}
+
+/* ==========================================================================
+   CONFIDENCE BREAKDOWN
+   ========================================================================== */
+
+.confidence-breakdown {
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+.confidence-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) 0;
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+}
+
+.confidence-row.total {
+    border-top: 1px solid var(--border-subtle);
+    margin-top: var(--space-2);
+    padding-top: var(--space-3);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+/* ==========================================================================
+   PROVENANCE LIST
+   ========================================================================== */
+
+.provenance-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.provenance-item {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+}
+
+.provenance-type {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.provenance-type.original {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--accent-green);
+}
+
+.provenance-type.confirmation {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--accent-blue);
+}
+
+.provenance-type.refinement {
+    background: rgba(156, 39, 176, 0.15);
+    color: var(--accent-purple);
+}
+
+.provenance-type.contradiction {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--accent-red);
+}
+
+.provenance-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.provenance-source {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-1);
+}
+
+.provenance-preview {
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   EMPTY STATE
+   ========================================================================== */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: var(--space-4);
+}
+
+.empty-text {
+    font-size: var(--text-heading);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.empty-hint {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   CONFIDENCE COLORS
+   ========================================================================== */
+
+:root {
+    --color-green: #4CAF50;
+    --color-blue: #2196F3;
+    --color-yellow: #FFC107;
+    --color-orange: #FF9800;
+    --color-red: #F44336;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .knowledge-browser {
+        flex-direction: column;
+    }
+
+    .knowledge-sidebar {
+        width: 100%;
+        max-height: 200px;
+    }
+
+    .knowledge-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .knowledge-filters {
+        flex-wrap: wrap;
+    }
+
+    .confidence-filter {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .knowledge-card-footer {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .knowledge-meta {
+        width: 100%;
+    }
+
+    .knowledge-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .knowledge-card,
+    .domain-item,
+    .btn {
+        transition: none;
+    }
+}

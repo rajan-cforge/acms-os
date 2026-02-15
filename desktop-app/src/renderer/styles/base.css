@@ -1,0 +1,698 @@
+/* ==========================================================================
+   ACMS Base Styles with Design Tokens
+   Sprint 1: Foundation - UX Improvements
+
+   This file provides design-token-based styles that gradually replace
+   hardcoded values in the existing CSS files.
+   ========================================================================== */
+
+/* ==========================================================================
+   CSS RESET with Design Tokens
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--line-height-normal);
+    color: var(--text-primary);
+    background: var(--bg-app);
+    min-height: 100vh;
+}
+
+/* ==========================================================================
+   TYPOGRAPHY with Design Tokens
+   ========================================================================== */
+
+h1, .h1 {
+    font-size: var(--text-h1);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    color: var(--text-primary);
+}
+
+h2, .h2 {
+    font-size: var(--text-h2);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    color: var(--text-primary);
+}
+
+h3, .h3 {
+    font-size: var(--text-h3);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    color: var(--text-primary);
+}
+
+p {
+    margin-bottom: var(--space-3);
+    color: var(--text-secondary);
+}
+
+small, .text-small {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.text-micro {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+code, pre, .mono {
+    font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   VIEW LAYOUT with Design Tokens
+   ========================================================================== */
+
+.view-container {
+    padding: var(--space-6);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.view-header {
+    margin-bottom: var(--space-6);
+}
+
+.view-header h2 {
+    font-size: var(--text-h1);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+}
+
+.view-subtitle {
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   CARD SYSTEM with Design Tokens
+   ========================================================================== */
+
+.card {
+    background: var(--bg-surface);
+    border: var(--card-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    box-shadow: var(--card-shadow);
+    transition: box-shadow var(--duration-normal) var(--ease-out),
+                border-color var(--duration-normal) var(--ease-out);
+}
+
+.card:hover {
+    box-shadow: var(--card-shadow-hover);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.card-title {
+    font-size: var(--text-h3);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.card-content {
+    color: var(--text-secondary);
+    line-height: var(--line-height-relaxed);
+}
+
+.card-footer {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* ==========================================================================
+   MEMORY CARD (Updated to use Design Tokens)
+   ========================================================================== */
+
+.memory-card {
+    background: var(--bg-surface);
+    border: var(--card-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    margin-bottom: var(--space-3);
+    transition: box-shadow var(--duration-normal) var(--ease-out),
+                border-color var(--duration-normal) var(--ease-out);
+}
+
+.memory-card:hover {
+    box-shadow: var(--card-shadow-hover);
+    border-color: var(--border-default);
+}
+
+.memory-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.memory-card-content {
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-3);
+}
+
+.memory-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   KNOWLEDGE CARD (Updated to use Design Tokens)
+   ========================================================================== */
+
+.knowledge-card {
+    background: var(--bg-surface);
+    border: var(--card-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    margin-bottom: var(--space-3);
+    position: relative;
+    transition: box-shadow var(--duration-normal) var(--ease-out),
+                border-color var(--duration-normal) var(--ease-out);
+}
+
+.knowledge-card:hover {
+    box-shadow: var(--card-shadow-hover);
+    border-color: var(--border-default);
+}
+
+.knowledge-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--accent-green);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.knowledge-card-content {
+    padding-left: var(--space-3);
+}
+
+.knowledge-card-title {
+    font-size: var(--text-h3);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.knowledge-card-body {
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+    line-height: var(--line-height-relaxed);
+}
+
+.knowledge-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* ==========================================================================
+   BADGES with Design Tokens
+   ========================================================================== */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Privacy badges */
+.badge-public {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--accent-green);
+}
+
+.badge-internal {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--accent-blue);
+}
+
+.badge-confidential {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--accent-orange);
+}
+
+.badge-local_only {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-red);
+}
+
+/* Tier badges */
+.badge-core {
+    background: rgba(147, 51, 234, 0.15);
+    color: var(--accent-purple);
+}
+
+.badge-active {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--accent-blue);
+}
+
+.badge-archive {
+    background: rgba(102, 102, 102, 0.15);
+    color: var(--text-tertiary);
+}
+
+/* Confidence badges */
+.badge-confidence {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-semibold);
+}
+
+.badge-confidence.high {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--confidence-high);
+}
+
+.badge-confidence.medium {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--confidence-medium);
+}
+
+.badge-confidence.low {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--confidence-low);
+}
+
+/* ==========================================================================
+   BUTTONS with Design Tokens
+   ========================================================================== */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--btn-height);
+    padding: 0 var(--btn-padding-x);
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--btn-radius);
+    border: none;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+.btn-primary {
+    background: var(--accent-green);
+    color: var(--text-inverse);
+}
+
+.btn-primary:hover {
+    background: var(--accent-green-dark);
+}
+
+.btn-secondary {
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-active);
+    border-color: var(--border-emphasis);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+}
+
+.btn-danger {
+    background: var(--accent-red);
+    color: var(--text-inverse);
+}
+
+.btn-danger:hover {
+    background: var(--accent-red-dark);
+}
+
+/* ==========================================================================
+   INPUTS with Design Tokens
+   ========================================================================== */
+
+.input {
+    height: var(--input-height);
+    padding: 0 var(--input-padding-x);
+    background: var(--input-bg);
+    border: var(--input-border);
+    border-radius: var(--input-radius);
+    font-size: var(--text-body);
+    color: var(--text-primary);
+    transition: border-color var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.input:disabled {
+    background: var(--bg-surface);
+    color: var(--text-disabled);
+    cursor: not-allowed;
+}
+
+/* Select inputs */
+select.input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23666' d='M4.5 6L8 9.5L11.5 6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-3) center;
+    padding-right: var(--space-6);
+}
+
+/* ==========================================================================
+   STATS CARDS with Design Tokens
+   ========================================================================== */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.stat-card {
+    background: var(--bg-surface);
+    border: var(--card-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+    text-align: center;
+}
+
+.stat-icon {
+    font-size: 32px;
+    margin-bottom: var(--space-2);
+}
+
+.stat-value {
+    font-size: var(--text-h1);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.stat-label {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   EMPTY STATE with Design Tokens
+   ========================================================================== */
+
+.empty-state {
+    text-align: center;
+    padding: var(--space-8) var(--space-6);
+    color: var(--text-tertiary);
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+.empty-state-title {
+    font-size: var(--text-h2);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.empty-state-description {
+    font-size: var(--text-body);
+    color: var(--text-tertiary);
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   LOADING STATE with Design Tokens
+   ========================================================================== */
+
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    color: var(--text-tertiary);
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent-green);
+    border-radius: var(--radius-full);
+    animation: spin 1s linear infinite;
+    margin-bottom: var(--space-4);
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-text {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   ERROR STATE with Design Tokens
+   ========================================================================== */
+
+.error-container {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    color: var(--accent-red);
+}
+
+.error-title {
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
+}
+
+.error-message {
+    font-size: var(--text-small);
+    color: var(--accent-red-light);
+}
+
+/* ==========================================================================
+   SCROLL AREA with Design Tokens
+   ========================================================================== */
+
+.scroll-area {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+}
+
+.scroll-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.scroll-area::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: var(--radius-full);
+}
+
+.scroll-area::-webkit-scrollbar-thumb:hover {
+    background: var(--border-emphasis);
+}
+
+/* ==========================================================================
+   DIVIDERS with Design Tokens
+   ========================================================================== */
+
+.divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: var(--space-4) 0;
+}
+
+.divider-vertical {
+    width: 1px;
+    background: var(--border-subtle);
+    margin: 0 var(--space-4);
+}
+
+/* ==========================================================================
+   SECTION HEADERS with Design Tokens
+   ========================================================================== */
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+}
+
+.section-title {
+    font-size: var(--text-h2);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+.section-subtitle {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   UTILITY CLASSES with Design Tokens
+   ========================================================================== */
+
+/* Spacing utilities */
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mt-6 { margin-top: var(--space-6); }
+
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
+.mb-6 { margin-bottom: var(--space-6); }
+
+.p-1 { padding: var(--space-1); }
+.p-2 { padding: var(--space-2); }
+.p-3 { padding: var(--space-3); }
+.p-4 { padding: var(--space-4); }
+.p-5 { padding: var(--space-5); }
+.p-6 { padding: var(--space-6); }
+
+/* Text utilities */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-success { color: var(--accent-green); }
+.text-warning { color: var(--accent-orange); }
+.text-error { color: var(--accent-red); }
+.text-info { color: var(--accent-blue); }
+
+/* Background utilities */
+.bg-surface { background: var(--bg-surface); }
+.bg-elevated { background: var(--bg-elevated); }
+.bg-overlay { background: var(--bg-overlay); }
+
+/* Border utilities */
+.border { border: 1px solid var(--border-default); }
+.border-subtle { border: 1px solid var(--border-subtle); }
+.border-emphasis { border: 1px solid var(--border-emphasis); }
+
+/* Border radius utilities */
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+/* Shadow utilities */
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+
+/* Flex utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: var(--space-1); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+
+/* Grid utilities */
+.grid { display: grid; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* Visibility */
+.hidden { display: none; }
+.visible { visibility: visible; }
+.invisible { visibility: hidden; }

@@ -1,0 +1,3437 @@
+const { ipcRenderer } = require('electron');
+
+// State management
+let state = {
+    memories: [],
+    searchQuery: '',
+    sourceFilter: '', // NEW: Filter by source
+    loading: false,
+    error: null,
+    apiHealth: { status: 'checking' },
+    settings: {
+        crsWeights: {
+            semantic: 0.5,
+            recency: 0.3,
+            tier: 0.2
+        }
+    },
+    view: 'chat', // 'chat', 'analytics', 'memories', 'conversations', 'settings', 'stats'
+    selectedMemory: null,
+    conversations: [],
+    conversationSourceFilter: '',
+    selectedConversation: null,
+    askState: {
+        question: '',
+        answer: null,
+        sources: [],
+        confidence: 0,
+        loading: false,
+        includeConfidential: true,
+        queryId: null,  // Week 4 Task 3: For feedback tracking
+        responseSource: null,  // Week 4 Task 3: cache/semantic_cache/claude
+        analytics: null,  // Week 4 Task 3: Detailed analytics trace
+        debugExpanded: false,  // Week 4 Task 3.5: Debug panel expanded state
+        debugData: null,  // Week 4 Task 3.5: API request/response for debugging
+        loadingStartTime: null,  // Track loading start time
+        loadingSeconds: 0,  // Elapsed seconds during loading
+        pipeline: null,  // Week 5 Task 1: Pipeline visibility data
+        pipelineExpanded: false  // Week 5 Task 1: Pipeline panel expanded state
+    },
+    feedbackGiven: {},  // Week 4 Task 3: Track feedback per query
+    analyticsStats: null,  // Week 4 Task 3: Analytics dashboard data
+};
+
+// Global timer interval for loading counter
+let loadingTimerInterval = null;
+
+// Week 4 Task 3: Global polling interval for analytics dashboard updates
+let analyticsPollingInterval = null;
+
+// Initialize app
+async function init() {
+    renderApp();
+
+    // Check API health
+    const health = await ipcRenderer.invoke('check-health');
+    state.apiHealth = health;
+
+    if (health.status === 'connected') {
+        await loadMemories();
+    } else {
+        state.error = 'Cannot connect to ACMS API. Please ensure Docker containers are running.';
+    }
+
+    renderApp();
+
+    // Set up event listeners
+    setupEventListeners();
+
+    // Listen for IPC events from main process
+    setupIPCListeners();
+}
+
+// Setup event listeners - use event delegation on root
+function setupEventListeners() {
+    const root = document.getElementById('root');
+
+    // Use event delegation - listener stays on root, works with dynamic content
+    root.addEventListener('click', async (e) => {
+        console.log('Click event:', e.target.id, e.target.className);
+
+        // Search button
+        if (e.target.id === 'search-btn') {
+            e.preventDefault();
+            const query = document.getElementById('search-input').value;
+            console.log('Search clicked, query:', query);
+            await performSearch(query);
+            return;
+        }
+
+        // Store button
+        if (e.target.id === 'store-btn') {
+            e.preventDefault();
+            console.log('Store clicked');
+            openStoreDialog();
+            return;
+        }
+
+        // Settings button
+        if (e.target.id === 'settings-btn') {
+            e.preventDefault();
+            console.log('Settings clicked, current view:', state.view);
+            if (state.view === 'settings') {
+                state.view = 'memories';
+            } else {
+                state.view = 'settings';
+            }
+            renderApp();
+            return;
+        }
+
+        // Back to memories button (from settings)
+        if (e.target.id === 'back-to-memories-btn') {
+            e.preventDefault();
+            console.log('Back to memories clicked');
+            state.view = 'memories';
+            renderApp();
+            return;
+        }
+
+        // Stats button
+        if (e.target.id === 'stats-btn') {
+            e.preventDefault();
+            console.log('Stats clicked');
+            await showStats();
+            return;
+        }
+
+        // Refresh button
+        if (e.target.id === 'refresh-btn') {
+            e.preventDefault();
+            console.log('Refresh clicked');
+            state.searchQuery = '';
+            await loadMemories();
+            return;
+        }
+
+        // Delete button click - prevent propagation and show confirmation
+        if (e.target.classList.contains('delete-memory-btn') || e.target.closest('.delete-memory-btn')) {
+            e.preventDefault();
+            e.stopPropagation(); // Prevent memory card click
+            const deleteBtn = e.target.classList.contains('delete-memory-btn') ? e.target : e.target.closest('.delete-memory-btn');
+            const memoryId = deleteBtn.dataset.memoryId;
+            console.log('Delete button clicked:', memoryId);
+            await showDeleteConfirmation(memoryId);
+            return;
+        }
+
+        // Memory card click - show details
+        const memoryCard = e.target.closest('.memory-card');
+        if (memoryCard) {
+            e.preventDefault();
+            const memoryId = memoryCard.dataset.memoryId;
+            console.log('Memory card clicked:', memoryId);
+            await showMemoryDetail(memoryId);
+            return;
+        }
+
+        // Back from memory detail
+        if (e.target.id === 'back-from-detail-btn') {
+            e.preventDefault();
+            console.log('Back from detail clicked');
+            state.view = 'memories';
+            state.selectedMemory = null;
+            renderApp();
+            return;
+        }
+
+        // Ask ACMS button
+        if (e.target.id === 'ask-btn') {
+            e.preventDefault();
+            console.log('Ask ACMS clicked');
+            state.view = 'ask';
+            renderApp();
+            return;
+        }
+
+        // Submit question button
+        if (e.target.id === 'submit-question-btn') {
+            e.preventDefault();
+            const question = document.getElementById('question-input').value;
+            console.log('Submit question clicked:', question);
+            await askQuestion(question);
+            return;
+        }
+
+        // Back from ask view
+        if (e.target.id === 'back-from-ask-btn') {
+            e.preventDefault();
+            console.log('Back from ask clicked');
+            state.view = 'memories';
+            renderApp();
+            return;
+        }
+
+        // Privacy checkbox toggle
+        if (e.target.id === 'include-confidential-checkbox') {
+            state.askState.includeConfidential = e.target.checked;
+            console.log('Privacy filter changed:', state.askState.includeConfidential);
+            return;
+        }
+
+        // Source card click in Ask view
+        const sourceCard = e.target.closest('.source-card');
+        if (sourceCard) {
+            e.preventDefault();
+            const memoryId = sourceCard.dataset.memoryId;
+            console.log('Source card clicked:', memoryId);
+            await showMemoryDetail(memoryId);
+            return;
+        }
+
+        // Week 4 Task 3: Feedback buttons
+        if (e.target.id === 'feedback-thumbs-up-btn') {
+            e.preventDefault();
+            console.log('Thumbs up clicked');
+            await submitFeedback('thumbs_up', 5);
+            return;
+        }
+
+        if (e.target.id === 'feedback-thumbs-down-btn') {
+            e.preventDefault();
+            console.log('Thumbs down clicked');
+            await submitFeedback('thumbs_down', 1);
+            return;
+        }
+
+        if (e.target.id === 'feedback-regenerate-btn') {
+            e.preventDefault();
+            console.log('Regenerate clicked');
+            await submitFeedback('regenerate', 2);
+            // Re-ask the same question
+            await askQuestion(state.askState.question);
+            return;
+        }
+
+        // Analytics button
+        if (e.target.id === 'analytics-btn') {
+            e.preventDefault();
+            console.log('Analytics clicked');
+            await showAnalytics();
+            return;
+        }
+
+        // Back from analytics
+        if (e.target.id === 'back-from-analytics-btn') {
+            e.preventDefault();
+            console.log('Back from analytics clicked');
+            state.view = 'chat';
+            stopAnalyticsPolling();
+            renderApp();
+            return;
+        }
+
+        // Conversations button
+        if (e.target.id === 'conversations-btn') {
+            e.preventDefault();
+            console.log('Conversations clicked');
+            await loadConversations();
+            return;
+        }
+
+        // Back from conversations
+        if (e.target.id === 'back-from-conversations-btn') {
+            e.preventDefault();
+            console.log('Back from conversations clicked');
+            state.view = 'memories';
+            renderApp();
+            return;
+        }
+
+        // Conversation card click
+        const conversationCard = e.target.closest('.conversation-card');
+        if (conversationCard) {
+            e.preventDefault();
+            const threadId = conversationCard.dataset.threadId;
+            console.log('Conversation card clicked:', threadId);
+            await showConversationDetail(threadId);
+            return;
+        }
+
+        // Back from conversation detail
+        if (e.target.id === 'back-from-conversation-detail-btn') {
+            e.preventDefault();
+            console.log('Back from conversation detail clicked');
+            state.view = 'conversations';
+            state.selectedConversation = null;
+            renderApp();
+            return;
+        }
+
+        // Week 4 Task 3.5: Toggle debug panel
+        if (e.target.id === 'toggle-debug-btn') {
+            e.preventDefault();
+            console.log('Toggle debug clicked');
+            state.askState.debugExpanded = !state.askState.debugExpanded;
+            renderApp();
+            return;
+        }
+
+        // Week 5 Task 1: Toggle pipeline panel
+        if (e.target.id === 'toggle-pipeline-btn') {
+            e.preventDefault();
+            console.log('Toggle pipeline clicked');
+            state.askState.pipelineExpanded = !state.askState.pipelineExpanded;
+            renderApp();
+            return;
+        }
+    });
+
+    // Enter key in search
+    root.addEventListener('keypress', async (e) => {
+        if (e.target.id === 'search-input' && e.key === 'Enter') {
+            e.preventDefault();
+            const query = e.target.value;
+            console.log('Search enter pressed, query:', query);
+            await performSearch(query);
+        }
+
+        // Enter key in question input
+        if (e.target.id === 'question-input' && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const question = e.target.value;
+            console.log('Question enter pressed:', question);
+            await askQuestion(question);
+        }
+    });
+
+    // CRS weight sliders
+    root.addEventListener('input', (e) => {
+        if (e.target.classList.contains('crs-slider')) {
+            const factor = e.target.dataset.factor;
+            const value = parseFloat(e.target.value);
+            console.log('Slider changed:', factor, value);
+            state.settings.crsWeights[factor] = value;
+
+            // Update display
+            const valueElement = document.getElementById(`${factor}-value`);
+            if (valueElement) {
+                valueElement.textContent = value.toFixed(2);
+            }
+
+            // Normalize weights to sum to 1.0
+            normalizeWeights();
+
+            // Update all slider displays after normalization
+            updateSliderDisplays();
+        }
+    });
+
+    // Source filter dropdown change
+    root.addEventListener('change', async (e) => {
+        if (e.target.id === 'source-filter') {
+            state.sourceFilter = e.target.value;
+            console.log('Source filter changed:', state.sourceFilter);
+            await loadMemories();
+        }
+
+        // Conversation source filter dropdown change
+        if (e.target.id === 'conversation-source-filter') {
+            state.conversationSourceFilter = e.target.value;
+            console.log('Conversation source filter changed:', state.conversationSourceFilter);
+            await loadConversations();
+        }
+    });
+}
+
+// Setup IPC listeners
+function setupIPCListeners() {
+    ipcRenderer.on('focus-search', () => {
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.focus();
+    });
+
+    ipcRenderer.on('open-store', () => {
+        openStoreDialog();
+    });
+
+    ipcRenderer.on('show-stats', async () => {
+        await showStats();
+    });
+
+    ipcRenderer.on('open-settings', () => {
+        state.view = 'settings';
+        renderApp();
+    });
+
+    ipcRenderer.on('api-health', (event, health) => {
+        state.apiHealth = health;
+        renderApp();
+    });
+}
+
+// Load memories from API
+async function loadMemories() {
+    stopAnalyticsPolling(); // Week 4 Task 3: Stop polling when navigating away
+    state.loading = true;
+    state.error = null;
+    renderApp();
+
+    try {
+        const result = await ipcRenderer.invoke('get-memories', 20, state.sourceFilter);
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        state.memories = result.memories || [];
+        state.loading = false;
+        renderApp();
+    } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        renderApp();
+    }
+}
+
+// Perform search
+async function performSearch(query) {
+    if (!query.trim()) {
+        await loadMemories();
+        return;
+    }
+
+    state.loading = true;
+    state.searchQuery = query;
+    renderApp();
+
+    try {
+        const result = await ipcRenderer.invoke('search-memories', query, 10);
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        state.memories = result.results || [];
+        state.loading = false;
+        renderApp();
+    } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        renderApp();
+    }
+}
+
+// Open store dialog
+function openStoreDialog() {
+    const content = prompt('Enter memory content:');
+    if (!content) return;
+
+    const tags = prompt('Enter tags (comma-separated):') || '';
+    const tier = prompt('Enter tier (SHORT/MID/LONG):', 'SHORT').toUpperCase();
+
+    storeMemory(content, tags.split(',').map(t => t.trim()), tier);
+}
+
+// Store memory
+async function storeMemory(content, tags, tier) {
+    try {
+        const result = await ipcRenderer.invoke('store-memory', {
+            content,
+            tags,
+            tier,
+            phase: 'phase-3'
+        });
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        alert('Memory stored successfully!');
+        await loadMemories();
+    } catch (error) {
+        alert(`Error storing memory: ${error.message}`);
+    }
+}
+
+// Show stats
+async function showStats() {
+    try {
+        const stats = await ipcRenderer.invoke('get-stats');
+
+        if (stats.error) {
+            throw new Error(stats.error);
+        }
+
+        const message = `
+ACMS Statistics:
+- Total Memories: ${stats.total || 0}
+- By Phase: ${JSON.stringify(stats.by_phase || {}, null, 2)}
+- By Tier: ${JSON.stringify(stats.by_tier || {}, null, 2)}
+- By Privacy: ${JSON.stringify(stats.by_privacy || {}, null, 2)}
+        `;
+
+        alert(message);
+    } catch (error) {
+        alert(`Error fetching stats: ${error.message}`);
+    }
+}
+
+// Show memory detail
+async function showMemoryDetail(memoryId) {
+    stopAnalyticsPolling(); // Week 4 Task 3: Stop polling when leaving analytics
+    state.loading = true;
+    state.error = null;
+    renderApp();
+
+    try {
+        const result = await ipcRenderer.invoke('get-memory', memoryId);
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        state.selectedMemory = result;
+        state.view = 'memory-detail';
+        state.loading = false;
+        renderApp();
+    } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        state.view = 'memories';
+        renderApp();
+    }
+}
+
+// Ask question (RAG Q&A)
+async function askQuestion(question) {
+    if (!question || !question.trim()) {
+        state.error = 'Please enter a question';
+        renderApp();
+        return;
+    }
+
+    // Clear any existing timer
+    if (loadingTimerInterval) {
+        clearInterval(loadingTimerInterval);
+        loadingTimerInterval = null;
+    }
+
+    state.askState.loading = true;
+    state.askState.question = question;
+    state.askState.answer = null;
+    state.askState.sources = [];
+    state.error = null;
+    // Start loading timer
+    state.askState.loadingStartTime = Date.now();
+    state.askState.loadingSeconds = 0;
+    renderApp();
+
+    // Update timer every second using global interval
+    loadingTimerInterval = setInterval(() => {
+        console.log('Timer tick - loading:', state.askState.loading, 'startTime:', state.askState.loadingStartTime);
+        if (!state.askState.loading || !state.askState.loadingStartTime) {
+            console.log('Timer stopped - loading is false or no start time');
+            return;
+        }
+
+        state.askState.loadingSeconds = Math.floor((Date.now() - state.askState.loadingStartTime) / 1000);
+        console.log('Updating timer to:', state.askState.loadingSeconds + 's');
+
+        // Update just the timer element instead of re-rendering entire app
+        const timerElement = document.getElementById('loading-timer-text');
+        if (timerElement) {
+            timerElement.textContent = `⏱️ ${state.askState.loadingSeconds}s - Processing your question...`;
+            console.log('Timer element updated successfully');
+        } else {
+            console.log('Timer element not found!');
+        }
+    }, 1000);
+
+    try {
+        // Prepare privacy filter
+        const privacyFilter = state.askState.includeConfidential
+            ? ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL']
+            : ['PUBLIC', 'INTERNAL'];
+
+        // Week 4 Task 3.5: Prepare request payload
+        const requestPayload = {
+            question: question,
+            context_limit: 5,
+            privacy_filter: privacyFilter
+        };
+
+        // Call API
+        const response = await fetch('http://localhost:40080/ask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestPayload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        state.askState.answer = result.answer;
+        state.askState.sources = result.sources || [];
+        state.askState.confidence = result.confidence || 0;
+        // Week 4 Task 3: Store tracking fields for feedback
+        state.askState.queryId = result.query_id || null;
+        state.askState.responseSource = result.response_source || 'unknown';
+        state.askState.analytics = result.analytics || null;  // Week 4 Task 3: Analytics trace
+        // Week 5 Task 1: Store pipeline visibility data
+        state.askState.pipeline = result.pipeline || null;
+        // Agent Transparency: Store which agent handled query and detected intent
+        state.askState.agentUsed = result.agent_used || null;
+        state.askState.intentDetected = result.intent_detected || null;
+        state.askState.cacheStatus = result.cache_status || null;
+        // Week 4 Task 3.5: Store request/response for debugging
+        state.askState.debugData = {
+            request: requestPayload,
+            response: result
+        };
+        state.askState.loading = false;
+        // Clear timer
+        if (loadingTimerInterval) {
+            clearInterval(loadingTimerInterval);
+            loadingTimerInterval = null;
+        }
+        renderApp();
+    } catch (error) {
+        state.error = `Error asking question: ${error.message}`;
+        state.askState.loading = false;
+        // Clear timer on error too
+        if (loadingTimerInterval) {
+            clearInterval(loadingTimerInterval);
+            loadingTimerInterval = null;
+        }
+        renderApp();
+    }
+}
+
+// Show delete confirmation dialog
+async function showDeleteConfirmation(memoryId) {
+    // Simple built-in dialog confirmation
+    const memory = state.memories.find(m => m.memory_id === memoryId);
+    const preview = memory ? memory.content.substring(0, 100) : 'this memory';
+
+    const confirmed = confirm(`Are you sure you want to delete this memory?\n\n"${preview}..."\n\nThis action cannot be undone.`);
+
+    if (confirmed) {
+        await deleteMemory(memoryId);
+    }
+}
+
+// Delete memory
+async function deleteMemory(memoryId) {
+    try {
+        const result = await ipcRenderer.invoke('delete-memory', memoryId);
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        console.log('Memory deleted successfully:', memoryId);
+
+        // Reload memories to update the list
+        await loadMemories();
+    } catch (error) {
+        alert(`Error deleting memory: ${error.message}`);
+    }
+}
+
+// Week 4 Task 3: Submit feedback
+async function submitFeedback(feedbackType, rating) {
+    const queryId = state.askState.queryId;
+    const responseSource = state.askState.responseSource;
+
+    if (!queryId) {
+        alert('No query ID available for feedback');
+        return;
+    }
+
+    // Check if feedback already given
+    if (state.feedbackGiven[queryId]) {
+        alert('You have already provided feedback for this query');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://localhost:40080/feedback', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query_id: queryId,
+                rating: rating,
+                feedback_type: feedbackType,
+                response_source: responseSource
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        // Mark feedback as given
+        state.feedbackGiven[queryId] = feedbackType;
+
+        console.log('Feedback submitted successfully:', result);
+
+        // Show success message (only for non-regenerate)
+        if (feedbackType !== 'regenerate') {
+            alert(`✅ Thank you for your feedback! (${feedbackType})`);
+        }
+
+        // Re-render to update UI
+        renderApp();
+    } catch (error) {
+        alert(`Error submitting feedback: ${error.message}`);
+    }
+}
+
+// Week 4 Task 3: Stop analytics polling
+function stopAnalyticsPolling() {
+    if (analyticsPollingInterval) {
+        clearInterval(analyticsPollingInterval);
+        analyticsPollingInterval = null;
+        console.log('Analytics polling stopped');
+    }
+}
+
+// Week 4 Task 3: Refresh analytics data (for polling)
+async function refreshAnalyticsData() {
+    try {
+        const response = await fetch('http://localhost:40080/analytics/dashboard?user_id=default&days=30');
+
+        if (!response.ok) {
+            console.error(`Failed to refresh analytics: ${response.status} ${response.statusText}`);
+            return;
+        }
+
+        const analyticsData = await response.json();
+
+        // Transform to match UI expectations
+        state.analyticsStats = {
+            cache: analyticsData.cache_performance,
+            user: {
+                overall: {
+                    total_queries: analyticsData.cache_performance.total_queries,
+                    total_ratings: analyticsData.user_satisfaction.total_feedback,
+                    avg_rating: analyticsData.user_satisfaction.avg_rating,
+                    rating_rate: analyticsData.user_satisfaction.total_feedback / analyticsData.cache_performance.total_queries
+                },
+                sources: analyticsData.source_performance
+            }
+        };
+
+        // Only re-render if we're still on analytics view
+        if (state.view === 'analytics') {
+            renderApp();
+            console.log('Analytics data refreshed at', new Date().toLocaleTimeString());
+        }
+    } catch (error) {
+        console.error('Error refreshing analytics:', error.message);
+        // Don't show error to user for background refreshes
+    }
+}
+
+// Week 4 Task 3: Show analytics dashboard (Updated for unified endpoint + polling)
+async function showAnalytics() {
+    // Stop any existing polling
+    stopAnalyticsPolling();
+
+    state.view = 'analytics';
+    state.loading = true;
+    renderApp();
+
+    try {
+        // Initial fetch
+        await refreshAnalyticsData();
+
+        state.loading = false;
+        renderApp();
+
+        // Start polling every 30 seconds
+        analyticsPollingInterval = setInterval(refreshAnalyticsData, 30000);
+        console.log('Analytics polling started (every 30s)');
+    } catch (error) {
+        state.error = `Error loading analytics: ${error.message}`;
+        state.loading = false;
+        state.view = 'memories';
+        renderApp();
+    }
+}
+
+
+// Load conversations from API
+async function loadConversations() {
+    stopAnalyticsPolling(); // Week 4 Task 3: Stop polling when leaving analytics
+    state.loading = true;
+    state.error = null;
+    state.view = 'conversations';
+    renderApp();
+
+    try {
+        const result = await ipcRenderer.invoke('get-conversations', {
+            source: state.conversationSourceFilter,
+            limit: 100,
+            offset: 0
+        });
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        state.conversations = result || [];
+        state.loading = false;
+        renderApp();
+    } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        renderApp();
+    }
+}
+
+// Show conversation detail
+async function showConversationDetail(threadId) {
+    stopAnalyticsPolling(); // Week 4 Task 3: Stop polling when leaving analytics
+    state.loading = true;
+    state.error = null;
+    renderApp();
+
+    try {
+        const result = await ipcRenderer.invoke('get-conversation', threadId);
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
+        state.selectedConversation = result;
+        state.view = 'conversation-detail';
+        state.loading = false;
+        renderApp();
+    } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        state.view = 'conversations';
+        renderApp();
+    }
+}
+
+// Normalize CRS weights to sum to 1.0
+function normalizeWeights() {
+    const weights = state.settings.crsWeights;
+    const sum = weights.semantic + weights.recency + weights.tier;
+
+    if (sum > 0) {
+        weights.semantic /= sum;
+        weights.recency /= sum;
+        weights.tier /= sum;
+    }
+}
+
+// Update all slider displays after normalization
+function updateSliderDisplays() {
+    const weights = state.settings.crsWeights;
+
+    const semanticValue = document.getElementById('semantic-value');
+    if (semanticValue) semanticValue.textContent = weights.semantic.toFixed(2);
+
+    const recencyValue = document.getElementById('recency-value');
+    if (recencyValue) recencyValue.textContent = weights.recency.toFixed(2);
+
+    const tierValue = document.getElementById('tier-value');
+    if (tierValue) tierValue.textContent = weights.tier.toFixed(2);
+}
+
+// Source helper functions
+function getSourceInfo(tags, metadata) {
+    // Check metadata first
+    if (metadata && metadata.source) {
+        return metadata.source.toLowerCase();
+    }
+
+    // Then check tags for source indicators
+    const sourceKeywords = ['github', 'chatgpt', 'gemini', 'claude', 'slack', 'chrome', 'cursor'];
+    for (const tag of tags || []) {
+        const tagLower = tag.toLowerCase();
+        if (sourceKeywords.includes(tagLower)) {
+            return tagLower;
+        }
+    }
+
+    return null;
+}
+
+function getSourceEmoji(source) {
+    const emojis = {
+        'github': '🐙',
+        'chatgpt': '💬',
+        'gemini': '✨',
+        'claude': '🤖',
+        'slack': '💼',
+        'chrome': '🌐',
+        'cursor': '⌨️'
+    };
+    return emojis[source] || '📝';
+}
+
+function getSourceColor(source) {
+    const colors = {
+        'github': '#6e5494',    // Purple
+        'chatgpt': '#10a37f',   // Green
+        'gemini': '#8e44ad',    // Deep purple
+        'claude': '#ff6b35',    // Orange
+        'slack': '#4a154b',     // Dark purple
+        'chrome': '#4285f4',    // Blue
+        'cursor': '#00a8ff'     // Light blue
+    };
+    return colors[source] || '#6b7280';
+}
+
+function getSourceDisplayName(source) {
+    const names = {
+        'github': 'GitHub',
+        'chatgpt': 'ChatGPT',
+        'gemini': 'Gemini',
+        'claude': 'Claude',
+        'slack': 'Slack',
+        'chrome': 'Chrome',
+        'cursor': 'Cursor'
+    };
+    return names[source] || source;
+}
+
+// Privacy helper functions
+function getPrivacyEmoji(privacyLevel) {
+    const emojis = {
+        'PUBLIC': '🔓',
+        'INTERNAL': '🔒',
+        'CONFIDENTIAL': '🔐',
+        'LOCAL_ONLY': '⛔'
+    };
+    return emojis[privacyLevel] || '❓';
+}
+
+function getPrivacyColor(privacyLevel) {
+    const colors = {
+        'PUBLIC': '#10b981',      // Green
+        'INTERNAL': '#3b82f6',    // Blue
+        'CONFIDENTIAL': '#f59e0b', // Orange
+        'LOCAL_ONLY': '#ef4444'   // Red
+    };
+    return colors[privacyLevel] || '#6b7280';
+}
+
+function getPrivacyDescription(privacyLevel) {
+    const descriptions = {
+        'PUBLIC': 'Safe to inject anywhere (docs, general knowledge)',
+        'INTERNAL': 'Your tools only (conversations, notes, personal context)',
+        'CONFIDENTIAL': 'Manual review required (sensitive discussions)',
+        'LOCAL_ONLY': 'Never leaves ACMS (credentials, API keys, secrets)'
+    };
+    return descriptions[privacyLevel] || 'Unknown privacy level';
+}
+
+// Calculate CRS score (client-side estimation)
+function calculateCRS(memory) {
+    const weights = state.settings.crsWeights;
+
+    // Semantic similarity (use distance if available, otherwise default)
+    const semantic = memory.distance ? (1 - memory.distance) : 0.8;
+
+    // Recency score (exponential decay)
+    const now = new Date();
+    const created = new Date(memory.created_at);
+    const daysSince = (now - created) / (1000 * 60 * 60 * 24);
+    const recency = Math.exp(-daysSince / 30); // 30-day half-life
+
+    // Tier score
+    const tierScores = { LONG: 1.2, MID: 1.0, SHORT: 0.8 };
+    const tier = tierScores[memory.tier] || 1.0;
+
+    // Calculate weighted score
+    const crs = (
+        semantic * weights.semantic +
+        recency * weights.recency +
+        tier * weights.tier
+    );
+
+    return Math.min(Math.max(crs, 0), 1);
+}
+
+// ================================================================
+// PHASE 1: UNIFIED CHAT INTERFACE
+// Security-first implementation: No innerHTML, all DOM via createElement
+// ================================================================
+
+// Chat state management
+const chatState = {
+    currentUser: '00000000-0000-0000-0000-000000000001', // Default user ID
+    conversations: [],
+    currentConversationId: null,
+    currentMessages: [],
+    selectedAgent: 'claude', // claude, gpt, gemini, claude-code
+    isLoading: false
+};
+
+// ================================================================
+// DOM HELPER FUNCTIONS (XSS-SAFE)
+// ================================================================
+
+/**
+ * Create DOM elements securely without innerHTML
+ * @param {string} tag - HTML tag name
+ * @param {Object} options - Element options (text, className, attrs, style, children)
+ * @returns {HTMLElement}
+ */
+function createElement(tag, options = {}) {
+    const element = document.createElement(tag);
+
+    // Set text content (XSS-safe)
+    if (options.text !== undefined) {
+        element.textContent = options.text;
+    }
+
+    // Set classes
+    if (options.className) {
+        element.className = options.className;
+    }
+
+    // Set attributes
+    if (options.attrs) {
+        Object.entries(options.attrs).forEach(([key, value]) => {
+            element.setAttribute(key, value);
+        });
+    }
+
+    // Set styles
+    if (options.style) {
+        Object.assign(element.style, options.style);
+    }
+
+    // Append children
+    if (options.children) {
+        options.children.forEach(child => {
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child) {
+                element.appendChild(child);
+            }
+        });
+    }
+
+    // Attach event listeners
+    if (options.events) {
+        Object.entries(options.events).forEach(([event, handler]) => {
+            element.addEventListener(event, handler);
+        });
+    }
+
+    return element;
+}
+
+/**
+ * Sanitize user input
+ * @param {string} input - User input string
+ * @returns {string} Sanitized string
+ */
+function sanitizeInput(input) {
+    if (typeof input !== 'string') {
+        throw new TypeError('Input must be a string');
+    }
+
+    // Trim whitespace
+    let sanitized = input.trim();
+
+    // Remove null bytes
+    sanitized = sanitized.replace(/\0/g, '');
+
+    // Limit length (prevent DoS)
+    const MAX_LENGTH = 10000;
+    if (sanitized.length > MAX_LENGTH) {
+        sanitized = sanitized.substring(0, MAX_LENGTH);
+    }
+
+    return sanitized;
+}
+
+/**
+ * Group conversations by date
+ * @param {Array} conversations - List of conversation objects
+ * @returns {Object} Grouped conversations
+ */
+function groupConversationsByDate(conversations) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    const groups = {
+        'Today': [],
+        'Yesterday': [],
+        'Previous 7 days': [],
+        'Previous 30 days': [],
+        'Older': []
+    };
+
+    conversations.forEach(conv => {
+        const date = new Date(conv.created_at);
+
+        if (date >= today) {
+            groups['Today'].push(conv);
+        } else if (date >= yesterday) {
+            groups['Yesterday'].push(conv);
+        } else if (date >= weekAgo) {
+            groups['Previous 7 days'].push(conv);
+        } else if (date >= monthAgo) {
+            groups['Previous 30 days'].push(conv);
+        } else {
+            groups['Older'].push(conv);
+        }
+    });
+
+    // Remove empty groups
+    Object.keys(groups).forEach(key => {
+        if (groups[key].length === 0) {
+            delete groups[key];
+        }
+    });
+
+    return groups;
+}
+
+/**
+ * Format timestamp for display
+ * @param {string} timestamp - ISO timestamp
+ * @returns {string} Formatted time
+ */
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ================================================================
+// API INTEGRATION FUNCTIONS
+// ================================================================
+
+/**
+ * Fetch conversations from API
+ */
+async function fetchConversations() {
+    try {
+        const response = await fetch(
+            `http://localhost:40080/chat/conversations?user_id=${chatState.currentUser}&limit=50&group_by_date=true`
+        );
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        chatState.conversations = data.conversations || [];
+
+        console.log('[Chat UI] Loaded conversations:', chatState.conversations.length);
+        renderSidebar();
+    } catch (error) {
+        console.error('[Chat UI] Failed to fetch conversations:', error);
+        showError('Failed to load conversations');
+    }
+}
+
+/**
+ * Fetch messages for a conversation
+ * @param {string} conversationId - Conversation UUID
+ */
+async function fetchMessages(conversationId) {
+    try {
+        const response = await fetch(
+            `http://localhost:40080/chat/conversations/${conversationId}`
+        );
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        chatState.currentMessages = data.messages || [];
+        chatState.currentConversationId = conversationId;
+
+        console.log('[Chat UI] Loaded messages:', chatState.currentMessages.length);
+        renderChatPanel();
+    } catch (error) {
+        console.error('[Chat UI] Failed to fetch messages:', error);
+        showError('Failed to load messages');
+    }
+}
+
+/**
+ * Create a new conversation
+ */
+async function createNewConversation() {
+    try {
+        const response = await fetch('http://localhost:40080/chat/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: chatState.currentUser,
+                agent: chatState.selectedAgent
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[Chat UI] Created conversation:', data.conversation_id);
+
+        // Refresh conversations and select the new one
+        await fetchConversations();
+        await fetchMessages(data.conversation_id);
+    } catch (error) {
+        console.error('[Chat UI] Failed to create conversation:', error);
+        showError('Failed to create conversation');
+    }
+}
+
+/**
+ * Send a message via WebSocket for real-time streaming
+ * @param {string} content - Message content
+ */
+async function sendMessage(content) {
+    if (!chatState.currentConversationId) {
+        // No conversation selected, create one first
+        await createNewConversation();
+
+        if (!chatState.currentConversationId) {
+            showError('Failed to create conversation');
+            return;
+        }
+    }
+
+    chatState.isLoading = true;
+    renderChatPanel(); // Show loading state
+
+    // WebSocket connection
+    const ws = new WebSocket(`ws://localhost:40080/ws/chat/${chatState.currentConversationId}`);
+
+    // Track thinking steps and AI content for real-time updates
+    const thinkingSteps = [];
+    let aiContent = '';
+    let userMessage = null;
+    let assistantMessage = null;
+
+    ws.onopen = () => {
+        console.log('[WebSocket] Connected for conversation:', chatState.currentConversationId);
+
+        // Send message
+        ws.send(JSON.stringify({
+            content: sanitizeInput(content),
+            user_id: chatState.currentUser
+        }));
+    };
+
+    ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        console.log('[WebSocket] Received:', message.type);
+
+        switch (message.type) {
+            case 'message_added':
+                // User message confirmed
+                userMessage = message.message;
+                chatState.currentMessages.push(userMessage);
+                renderChatPanel();
+                break;
+
+            case 'status':
+                // Real-time thinking step update
+                thinkingSteps.push({
+                    step: message.step,
+                    message: message.message
+                });
+
+                // Update thinking display in real-time
+                updateThinkingStepsDisplay(thinkingSteps);
+                break;
+
+            case 'chunk':
+                // Streaming text chunk
+                aiContent += message.text;
+                updateAIResponseDisplay(aiContent, thinkingSteps);
+                break;
+
+            case 'done':
+                // Final message with complete metadata
+                assistantMessage = message.message;
+
+                // Attach thinking steps to message metadata for persistent display
+                if (!assistantMessage.message_metadata) {
+                    assistantMessage.message_metadata = {};
+                }
+                assistantMessage.message_metadata.thinking_steps = thinkingSteps;
+
+                chatState.currentMessages.push(assistantMessage);
+
+                // Clean up temporary displays
+                const tempThinking = document.getElementById('realtime-thinking');
+                const tempResponse = document.getElementById('realtime-response');
+                if (tempThinking) tempThinking.remove();
+                if (tempResponse) tempResponse.remove();
+
+                // Final render
+                chatState.isLoading = false;
+                renderChatPanel();
+
+                // Scroll to bottom
+                setTimeout(() => {
+                    const messageList = document.querySelector('.message-list');
+                    if (messageList) {
+                        messageList.scrollTop = messageList.scrollHeight;
+                    }
+                }, 100);
+
+                ws.close();
+                break;
+
+            case 'error':
+                console.error('[WebSocket] Error:', message.message);
+                chatState.isLoading = false;
+                showError(message.message);
+                renderChatPanel();
+                ws.close();
+                break;
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('[WebSocket] Connection error:', error);
+        chatState.isLoading = false;
+        showError('WebSocket connection failed');
+        renderChatPanel();
+    };
+
+    ws.onclose = () => {
+        console.log('[WebSocket] Connection closed');
+    };
+}
+
+/**
+ * Update thinking steps display in real-time
+ * @param {Array} steps - Array of thinking steps
+ */
+function updateThinkingStepsDisplay(steps) {
+    const messageList = document.querySelector('.message-list');
+    if (!messageList) return;
+
+    // Find or create thinking display container
+    let thinkingContainer = document.getElementById('realtime-thinking');
+
+    if (!thinkingContainer) {
+        thinkingContainer = createElement('div', {
+            id: 'realtime-thinking',
+            style: {
+                margin: '12px 0',
+                padding: '12px',
+                background: '#f8f9fa',
+                borderRadius: '8px',
+                border: '1px solid #e0e0e0',
+                animation: 'pulse 2s infinite'
+            }
+        });
+        messageList.appendChild(thinkingContainer);
+    }
+
+    // Clear and rebuild
+    thinkingContainer.innerHTML = '';
+
+    const stepLabels = {
+        'intent_detection': {icon: '💡', label: 'Intent Detection'},
+        'cache_check': {icon: '⚡', label: 'Cache Check'},
+        'agent_selection': {icon: '🤖', label: 'Agent Selection'},
+        'context_assembly': {icon: '📚', label: 'Context Assembly'},
+        'compliance_check': {icon: '🛡️', label: 'Compliance Check'},
+        'agent_execution': {icon: '⚙️', label: 'Agent Execution'},
+        'feedback_storage': {icon: '💾', label: 'Feedback Storage'}
+    };
+
+    // Deduplicate steps (keep last of each)
+    const uniqueSteps = {};
+    steps.forEach(step => {
+        uniqueSteps[step.step] = step;
+    });
+
+    // Header
+    const header = createElement('div', {
+        style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontWeight: '600',
+            fontSize: '12px',
+            color: '#6366f1',
+            marginBottom: '8px'
+        },
+        children: [
+            createElement('span', {text: '🧠'}),
+            createElement('span', {text: `Thinking (${Object.keys(uniqueSteps).length} steps)...`})
+        ]
+    });
+    thinkingContainer.appendChild(header);
+
+    // Steps
+    Object.values(uniqueSteps).forEach(step => {
+        const stepInfo = stepLabels[step.step] || {icon: '✓', label: step.step};
+        const stepEl = createElement('div', {
+            style: {
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '6px',
+                padding: '4px 0',
+                color: '#555',
+                fontSize: '11px'
+            },
+            children: [
+                createElement('span', {text: stepInfo.icon, style: {fontSize: '12px'}}),
+                createElement('span', {
+                    text: `${stepInfo.label}: `,
+                    style: {fontWeight: '600'}
+                }),
+                createElement('span', {text: step.message})
+            ]
+        });
+        thinkingContainer.appendChild(stepEl);
+    });
+}
+
+/**
+ * Update AI response display during streaming
+ * @param {string} content - Current AI content
+ * @param {Array} thinkingSteps - Thinking steps
+ */
+function updateAIResponseDisplay(content, thinkingSteps) {
+    const messageList = document.querySelector('.message-list');
+    if (!messageList) return;
+
+    // Find or create streaming response container
+    let responseContainer = document.getElementById('realtime-response');
+
+    if (!responseContainer) {
+        responseContainer = createElement('div', {
+            id: 'realtime-response',
+            style: {
+                margin: '12px 0',
+                padding: '12px',
+                background: '#ffffff',
+                borderRadius: '8px',
+                border: '1px solid #e0e0e0'
+            }
+        });
+        messageList.appendChild(responseContainer);
+    }
+
+    // Update content
+    responseContainer.textContent = content;
+
+    // Auto-scroll
+    messageList.scrollTop = messageList.scrollHeight;
+}
+
+/**
+ * Show error notification
+ * @param {string} message - Error message
+ */
+function showError(message) {
+    console.error('[Chat UI]', message);
+    // TODO: Implement toast notification system in Phase 4
+    alert(message);
+}
+
+// ================================================================
+// RENDER FUNCTIONS
+// ================================================================
+
+/**
+ * Render sidebar with conversation list
+ */
+function renderSidebar() {
+    const sidebar = document.querySelector('.chat-sidebar');
+    if (!sidebar) return;
+
+    // Clear existing content
+    sidebar.innerHTML = '';
+
+    // Header with "New Conversation" button
+    const header = createElement('div', {
+        className: 'sidebar-header',
+        children: [
+            createElement('button', {
+                className: 'new-conversation-btn',
+                text: '+ New Conversation',
+                events: {
+                    click: createNewConversation
+                }
+            })
+        ]
+    });
+
+    sidebar.appendChild(header);
+
+    // Navigation buttons (analytics, memories, etc.)
+    const nav = createElement('div', {
+        className: 'sidebar-navigation',
+        style: {
+            padding: '12px',
+            borderBottom: '1px solid #333',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+        },
+        children: [
+            createElement('button', {
+                id: 'analytics-btn',
+                className: state.view === 'analytics' ? 'nav-btn active' : 'nav-btn',
+                text: '📊 Analytics',
+                style: {
+                    width: '100%',
+                    padding: '10px',
+                    background: state.view === 'analytics' ? '#4CAF50' : '#2a2a2a',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: state.view === 'analytics' ? '600' : '400'
+                },
+                events: {
+                    click: showAnalytics
+                }
+            }),
+            createElement('button', {
+                id: 'memories-btn',
+                className: state.view === 'memories' ? 'nav-btn active' : 'nav-btn',
+                text: '💾 Memories',
+                style: {
+                    width: '100%',
+                    padding: '10px',
+                    background: state.view === 'memories' ? '#4CAF50' : '#2a2a2a',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: state.view === 'memories' ? '600' : '400'
+                },
+                events: {
+                    click: () => {
+                        console.log('Memories view clicked');
+                        state.view = 'memories';
+                        renderApp();
+                    }
+                }
+            })
+        ]
+    });
+
+    sidebar.appendChild(nav);
+
+    // Conversation list
+    const listContainer = createElement('div', { className: 'conversation-list' });
+
+    if (chatState.conversations.length === 0) {
+        const emptyState = createElement('div', {
+            style: { padding: '40px 20px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' },
+            children: [
+                createElement('div', { text: '💬', style: { fontSize: '48px', marginBottom: '16px' } }),
+                createElement('div', { text: 'No conversations yet', style: { fontSize: '14px' } })
+            ]
+        });
+        listContainer.appendChild(emptyState);
+    } else {
+        // Group by date
+        const grouped = groupConversationsByDate(chatState.conversations);
+
+        Object.entries(grouped).forEach(([groupName, convs]) => {
+            const group = createElement('div', {
+                className: 'conversation-date-group',
+                children: [
+                    createElement('div', {
+                        className: 'conversation-date-label',
+                        text: groupName
+                    })
+                ]
+            });
+
+            convs.forEach(conv => {
+                const item = createElement('div', {
+                    className: `conversation-item ${conv.conversation_id === chatState.currentConversationId ? 'active' : ''}`,
+                    events: {
+                        click: () => fetchMessages(conv.conversation_id)
+                    },
+                    children: [
+                        createElement('div', {
+                            className: 'conversation-item-title',
+                            text: conv.title || 'New Conversation'
+                        }),
+                        createElement('div', {
+                            className: 'conversation-item-meta',
+                            children: [
+                                createElement('span', {
+                                    className: `agent-badge ${conv.agent}`,
+                                    text: conv.agent
+                                }),
+                                createElement('span', {
+                                    text: formatTimestamp(conv.created_at)
+                                })
+                            ]
+                        })
+                    ]
+                });
+
+                group.appendChild(item);
+            });
+
+            listContainer.appendChild(group);
+        });
+    }
+
+    sidebar.appendChild(listContainer);
+}
+
+/**
+ * Render chat panel with messages and input
+ */
+function renderChatPanel() {
+    const panel = document.querySelector('.chat-panel');
+    if (!panel) return;
+
+    // Clear existing content
+    panel.innerHTML = '';
+
+    // Header
+    const currentConv = chatState.conversations.find(
+        c => c.conversation_id === chatState.currentConversationId
+    );
+
+    const header = createElement('div', {
+        className: 'chat-header',
+        children: [
+            createElement('div', {
+                className: 'chat-header-left',
+                children: [
+                    createElement('div', {
+                        className: 'chat-title',
+                        text: currentConv ? (currentConv.title || 'New Conversation') : 'ACMS Chat'
+                    }),
+                    currentConv ? createElement('span', {
+                        className: `agent-badge ${currentConv.agent}`,
+                        text: currentConv.agent
+                    }) : null
+                ]
+            })
+        ]
+    });
+
+    panel.appendChild(header);
+
+    // Message list
+    const messageList = createElement('div', { className: 'message-list' });
+
+    if (chatState.currentMessages.length === 0 && !chatState.isLoading) {
+        // Empty state
+        const emptyState = createElement('div', {
+            className: 'empty-state',
+            children: [
+                createElement('div', { className: 'empty-state-icon', text: '💬' }),
+                createElement('div', { className: 'empty-state-text', text: 'Start a conversation' }),
+                createElement('div', {
+                    className: 'empty-state-hint',
+                    text: 'Type a message below to begin chatting with AI agents'
+                })
+            ]
+        });
+        messageList.appendChild(emptyState);
+    } else {
+        // Render messages
+        chatState.currentMessages.forEach(msg => {
+            // Build children for message-content-wrapper
+            const contentWrapperChildren = [
+                createElement('div', {
+                    className: 'message-content',
+                    text: msg.content
+                })
+            ];
+
+            // Add transparency badges for assistant messages
+            if (msg.role === 'assistant' && msg.message_metadata) {
+                const metadata = msg.message_metadata;
+
+                // Add thinking steps display if available
+                if (metadata.thinking_steps && metadata.thinking_steps.length > 0) {
+                    const thinkingId = `thinking-${msg.message_id || Math.random()}`;
+                    const isExpanded = false; // Collapsed by default
+
+                    const thinkingContainer = createElement('div', {
+                        style: {
+                            marginTop: '12px',
+                            padding: '8px 12px',
+                            background: '#f8f9fa',
+                            borderRadius: '8px',
+                            border: '1px solid #e0e0e0'
+                        },
+                        children: [
+                            // Thinking header (clickable to expand/collapse)
+                            createElement('div', {
+                                style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: '600',
+                                    fontSize: '12px',
+                                    color: '#6366f1',
+                                    userSelect: 'none'
+                                },
+                                events: {
+                                    click: () => {
+                                        console.log('[DEBUG] Thinking header clicked! ID:', thinkingId);
+                                        const stepsEl = document.getElementById(thinkingId);
+                                        console.log('[DEBUG] Steps element:', stepsEl);
+                                        if (stepsEl) {
+                                            const isHidden = stepsEl.style.display === 'none';
+                                            console.log('[DEBUG] Current display:', stepsEl.style.display, '| isHidden:', isHidden);
+                                            stepsEl.style.display = isHidden ? 'block' : 'none';
+                                            console.log('[DEBUG] New display:', stepsEl.style.display);
+                                        } else {
+                                            console.error('[DEBUG] Steps element not found for ID:', thinkingId);
+                                        }
+                                    }
+                                },
+                                children: [
+                                    createElement('span', {text: '🧠'}),
+                                    createElement('span', {
+                                        text: (() => {
+                                            // Count unique steps
+                                            const uniqueStepNames = new Set(metadata.thinking_steps.map(s => s.step));
+                                            return `Thinking (${uniqueStepNames.size} steps)`;
+                                        })()
+                                    }),
+                                    createElement('span', {
+                                        text: '▼',
+                                        style: {fontSize: '10px'}
+                                    })
+                                ]
+                            }),
+                            // Thinking steps (collapsed by default)
+                            createElement('div', {
+                                attrs: { id: thinkingId },
+                                style: {
+                                    display: isExpanded ? 'block' : 'none',
+                                    marginTop: '8px',
+                                    fontSize: '11px'
+                                },
+                                children: (() => {
+                                    // Deduplicate steps: keep only the last event for each unique step name
+                                    const uniqueSteps = {};
+                                    metadata.thinking_steps.forEach(step => {
+                                        uniqueSteps[step.step] = step;
+                                    });
+
+                                    // Map step names to friendly labels and icons
+                                    const stepLabels = {
+                                        'intent_detection': {icon: '💡', label: 'Intent Detection'},
+                                        'cache_check': {icon: '⚡', label: 'Cache Check'},
+                                        'agent_selection': {icon: '🤖', label: 'Agent Selection'},
+                                        'context_assembly': {icon: '📚', label: 'Context Assembly'},
+                                        'compliance_check': {icon: '🛡️', label: 'Compliance Check'},
+                                        'agent_execution': {icon: '⚙️', label: 'Agent Execution'},
+                                        'feedback_storage': {icon: '💾', label: 'Feedback Storage'}
+                                    };
+
+                                    return Object.values(uniqueSteps).map(step => {
+                                        const stepInfo = stepLabels[step.step] || {icon: '✓', label: step.step};
+
+                                        return createElement('div', {
+                                            style: {
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                gap: '6px',
+                                                padding: '4px 0',
+                                                color: '#555'
+                                            },
+                                            children: [
+                                                createElement('span', {
+                                                    text: stepInfo.icon,
+                                                    style: {fontSize: '12px'}
+                                                }),
+                                                createElement('span', {
+                                                    text: `${stepInfo.label}: `,
+                                                    style: {fontWeight: '600'}
+                                                }),
+                                                createElement('span', {
+                                                    text: step.message
+                                                })
+                                            ]
+                                        });
+                                    });
+                                })()
+                            })
+                        ]
+                    });
+
+                    contentWrapperChildren.push(thinkingContainer);
+                }
+
+                // Create badges container
+                const badgesDiv = createElement('div', {
+                    style: {
+                        display: 'flex',
+                        gap: '6px',
+                        marginTop: '8px',
+                        flexWrap: 'wrap'
+                    }
+                });
+
+                // Agent badge
+                if (metadata.agent || metadata.model) {
+                    const agent = (metadata.agent || metadata.model || '').toLowerCase();
+                    let agentColor = '#888';
+                    let agentLabel = agent;
+
+                    if (agent.includes('claude')) {
+                        agentColor = '#ff6b35';
+                        agentLabel = '🤖 Claude';
+                    } else if (agent.includes('gpt') || agent.includes('chatgpt')) {
+                        agentColor = '#10a37f';
+                        agentLabel = '🤖 ChatGPT';
+                    } else if (agent.includes('gemini')) {
+                        agentColor = '#4285F4';
+                        agentLabel = '🤖 Gemini';
+                    }
+
+                    badgesDiv.appendChild(createElement('span', {
+                        text: agentLabel,
+                        style: {
+                            fontSize: '10px',
+                            background: agentColor,
+                            color: 'white',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontWeight: '600'
+                        }
+                    }));
+                }
+
+                // Intent badge
+                if (metadata.intent_detected && metadata.intent_detected !== 'unknown') {
+                    const intent = metadata.intent_detected.toLowerCase();
+                    badgesDiv.appendChild(createElement('span', {
+                        text: `💡 ${intent}`,
+                        style: {
+                            fontSize: '10px',
+                            background: '#6366f1',
+                            color: 'white',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontWeight: '600'
+                        }
+                    }));
+                }
+
+                // Cache badge
+                if (metadata.from_cache) {
+                    badgesDiv.appendChild(createElement('span', {
+                        text: '⚡ cached',
+                        style: {
+                            fontSize: '10px',
+                            background: '#10b981',
+                            color: 'white',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontWeight: '600'
+                        }
+                    }));
+                }
+
+                contentWrapperChildren.push(badgesDiv);
+            }
+
+            // Add timestamp
+            contentWrapperChildren.push(createElement('div', {
+                className: 'message-timestamp',
+                text: formatTimestamp(msg.created_at)
+            }));
+
+            const message = createElement('div', {
+                className: `message ${msg.role}`,
+                children: [
+                    createElement('div', {
+                        className: 'message-avatar',
+                        text: msg.role === 'user' ? '👤' : '🤖'
+                    }),
+                    createElement('div', {
+                        className: 'message-content-wrapper',
+                        children: contentWrapperChildren
+                    })
+                ]
+            });
+
+            messageList.appendChild(message);
+        });
+
+        // Loading indicator
+        if (chatState.isLoading) {
+            const loading = createElement('div', {
+                className: 'loading-indicator',
+                children: [
+                    createElement('span', { text: 'AI is thinking' }),
+                    createElement('div', {
+                        className: 'loading-dots',
+                        children: [
+                            createElement('div', { className: 'loading-dot' }),
+                            createElement('div', { className: 'loading-dot' }),
+                            createElement('div', { className: 'loading-dot' })
+                        ]
+                    })
+                ]
+            });
+            messageList.appendChild(loading);
+        }
+    }
+
+    panel.appendChild(messageList);
+
+    // Input area
+    const inputArea = createElement('div', { className: 'input-area' });
+    const inputContainer = createElement('div', { className: 'input-container' });
+
+    const inputWrapper = createElement('div', { className: 'input-wrapper' });
+    const textarea = createElement('textarea', {
+        className: 'message-input',
+        attrs: {
+            placeholder: 'Type your message... (Press Enter to send, Shift+Enter for new line)',
+            rows: 1
+        }
+    });
+
+    // Handle Enter key
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const content = textarea.value.trim();
+            if (content && !chatState.isLoading) {
+                sendMessage(content);
+                textarea.value = '';
+            }
+        }
+    });
+
+    inputWrapper.appendChild(textarea);
+
+    const sendBtn = createElement('button', {
+        className: 'send-btn',
+        text: 'Send',
+        attrs: chatState.isLoading ? { disabled: 'disabled' } : {},
+        events: {
+            click: () => {
+                const content = textarea.value.trim();
+                if (content && !chatState.isLoading) {
+                    sendMessage(content);
+                    textarea.value = '';
+                }
+            }
+        }
+    });
+
+    inputContainer.appendChild(inputWrapper);
+    inputContainer.appendChild(sendBtn);
+    inputArea.appendChild(inputContainer);
+    panel.appendChild(inputArea);
+}
+
+/**
+ * Render analytics panel (Week 7 style with createElement)
+ */
+function renderAnalyticsPanel() {
+    const panel = document.querySelector('.analytics-panel, .chat-panel');
+    if (!panel) return;
+
+    panel.innerHTML = '';
+    panel.className = 'analytics-panel';
+
+    // Header
+    const header = createElement('div', {
+        className: 'analytics-header',
+        style: {
+            padding: '20px',
+            borderBottom: '1px solid #333',
+            background: '#1a1a1a'
+        },
+        children: [
+            createElement('h2', {
+                text: '📊 Analytics Dashboard',
+                style: { color: '#4CAF50', margin: '0 0 10px 0' }
+            }),
+            createElement('div', {
+                text: `Last updated: ${new Date().toLocaleTimeString()} • Auto-refresh every 30s`,
+                style: { color: '#888', fontSize: '13px' }
+            })
+        ]
+    });
+
+    panel.appendChild(header);
+
+    // Content area
+    const content = createElement('div', {
+        className: 'analytics-content',
+        style: {
+            padding: '24px',
+            overflowY: 'auto',
+            height: 'calc(100vh - 120px)'
+        }
+    });
+
+    // Loading state
+    if (state.loading) {
+        content.appendChild(createElement('div', {
+            className: 'loading-indicator',
+            style: { textAlign: 'center', padding: '60px 20px' },
+            children: [
+                createElement('div', { className: 'spinner' }),
+                createElement('p', {
+                    text: 'Loading analytics...',
+                    style: { color: '#888', marginTop: '16px' }
+                })
+            ]
+        }));
+        panel.appendChild(content);
+        return;
+    }
+
+    // No data state
+    if (!state.analyticsStats) {
+        content.appendChild(createElement('div', {
+            style: { textAlign: 'center', padding: '60px 20px' },
+            children: [
+                createElement('p', {
+                    text: 'No analytics data available',
+                    style: { color: '#888', fontSize: '16px' }
+                })
+            ]
+        }));
+        panel.appendChild(content);
+        return;
+    }
+
+    const stats = state.analyticsStats;
+
+    // Cache Performance Section
+    if (stats.cache) {
+        const cacheSection = renderCachePerformanceSection(stats.cache);
+        content.appendChild(cacheSection);
+    }
+
+    // Source Performance Section
+    if (stats.sources && stats.sources.length > 0) {
+        const sourceSection = renderSourcePerformanceSection(stats.sources);
+        content.appendChild(sourceSection);
+    }
+
+    // User Satisfaction Section
+    if (stats.user && stats.user.sources && stats.user.sources.length > 0) {
+        const userSection = renderUserSatisfactionSection(stats.user);
+        content.appendChild(userSection);
+    }
+
+    panel.appendChild(content);
+}
+
+/**
+ * Helper: Render cache performance section
+ */
+function renderCachePerformanceSection(cache) {
+    const section = createElement('div', {
+        className: 'analytics-section',
+        style: {
+            background: '#242424',
+            border: '1px solid #333',
+            borderRadius: '8px',
+            padding: '24px',
+            marginBottom: '24px'
+        }
+    });
+
+    section.appendChild(createElement('h3', {
+        text: '⚡ Cache Performance',
+        style: { color: '#e0e0e0', margin: '0 0 20px 0' }
+    }));
+
+    // Grid of metrics
+    const metricsGrid = createElement('div', {
+        style: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+        }
+    });
+
+    // Metric cards
+    const metrics = [
+        { label: 'Total Queries', value: cache.total_queries || 0, color: '#3b82f6' },
+        { label: 'Exact Cache Hits', value: cache.exact_cache_hits || 0, color: '#10a37f', subtext: `${((cache.exact_hit_rate || 0) * 100).toFixed(1)}% hit rate` },
+        { label: 'Semantic Cache Hits', value: cache.semantic_cache_hits || 0, color: '#8b5cf6', subtext: `${((cache.semantic_hit_rate || 0) * 100).toFixed(1)}% hit rate` },
+        { label: 'Total Hit Rate', value: `${((cache.total_hit_rate || 0) * 100).toFixed(1)}%`, color: (cache.total_hit_rate || 0) > 0.4 ? '#4CAF50' : '#FFC107', subtext: 'Target: 40%+' }
+    ];
+
+    metrics.forEach(metric => {
+        metricsGrid.appendChild(createElement('div', {
+            style: {
+                background: '#1a1a1a',
+                padding: '16px',
+                borderRadius: '6px',
+                borderLeft: `3px solid ${metric.color}`
+            },
+            children: [
+                createElement('div', {
+                    text: metric.label,
+                    style: { color: '#888', fontSize: '12px', marginBottom: '4px' }
+                }),
+                createElement('div', {
+                    text: String(metric.value),
+                    style: { color: '#e0e0e0', fontSize: '28px', fontWeight: '600' }
+                }),
+                metric.subtext ? createElement('div', {
+                    text: metric.subtext,
+                    style: { color: '#888', fontSize: '11px', marginTop: '4px' }
+                }) : null
+            ].filter(Boolean)
+        }));
+    });
+
+    section.appendChild(metricsGrid);
+
+    // Latency comparison
+    const latencySection = createElement('div', {
+        style: {
+            marginTop: '20px',
+            paddingTop: '20px',
+            borderTop: '1px solid #333'
+        }
+    });
+
+    const latencyGrid = createElement('div', {
+        style: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+        }
+    });
+
+    const latencyMetrics = [
+        { label: 'Avg Cache Hit Latency', value: `${(cache.avg_latency_cache_hit_ms || 0).toFixed(0)}ms`, color: '#4CAF50' },
+        { label: 'Avg Cache Miss Latency', value: `${(cache.avg_latency_cache_miss_ms || 0).toFixed(0)}ms`, color: '#f44336' },
+        { label: 'Est. Cost Savings', value: `$${(cache.estimated_cost_savings_usd || 0).toFixed(2)}`, color: '#4CAF50' }
+    ];
+
+    latencyMetrics.forEach(metric => {
+        latencyGrid.appendChild(createElement('div', {
+            style: {
+                background: '#1a1a1a',
+                padding: '16px',
+                borderRadius: '6px'
+            },
+            children: [
+                createElement('div', {
+                    text: metric.label,
+                    style: { color: '#888', fontSize: '12px', marginBottom: '4px' }
+                }),
+                createElement('div', {
+                    text: metric.value,
+                    style: { color: metric.color, fontSize: '20px', fontWeight: '600' }
+                })
+            ]
+        }));
+    });
+
+    latencySection.appendChild(latencyGrid);
+    section.appendChild(latencySection);
+
+    return section;
+}
+
+/**
+ * Helper: Render source performance section
+ */
+function renderSourcePerformanceSection(sources) {
+    const section = createElement('div', {
+        className: 'analytics-section',
+        style: {
+            background: '#242424',
+            border: '1px solid #333',
+            borderRadius: '8px',
+            padding: '24px',
+            marginBottom: '24px'
+        }
+    });
+
+    section.appendChild(createElement('h3', {
+        text: '🤖 AI Source Performance',
+        style: { color: '#e0e0e0', margin: '0 0 20px 0' }
+    }));
+
+    // Create table
+    const table = createElement('table', {
+        style: {
+            width: '100%',
+            borderCollapse: 'collapse'
+        }
+    });
+
+    // Table header
+    const thead = createElement('thead');
+    const headerRow = createElement('tr', {
+        style: { borderBottom: '1px solid #333' }
+    });
+
+    ['Source', 'Avg Rating', 'Queries', '👍', '👎', '🔄'].forEach(text => {
+        headerRow.appendChild(createElement('th', {
+            text,
+            style: {
+                color: '#888',
+                fontSize: '12px',
+                padding: '8px',
+                textAlign: 'left',
+                fontWeight: '600'
+            }
+        }));
+    });
+
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Table body
+    const tbody = createElement('tbody');
+
+    sources.forEach((source, idx) => {
+        const row = createElement('tr', {
+            style: {
+                borderBottom: idx < sources.length - 1 ? '1px solid #333' : 'none'
+            }
+        });
+
+        // Source name with emoji
+        const sourceEmoji = {
+            cache: '⚡',
+            semantic_cache: '✨',
+            claude: '🤖',
+            chatgpt: '💬',
+            gemini: '💎'
+        }[source.response_source] || '❓';
+
+        row.appendChild(createElement('td', {
+            text: `${sourceEmoji} ${source.response_source}`,
+            style: { color: '#e0e0e0', padding: '12px 8px', fontWeight: '600' }
+        }));
+
+        // Avg rating (colored)
+        const avgRating = source.avg_rating || 0;
+        const ratingColor = avgRating >= 4 ? '#4CAF50' : avgRating >= 3 ? '#FFC107' : '#f44336';
+        row.appendChild(createElement('td', {
+            text: avgRating.toFixed(2),
+            style: { color: ratingColor, padding: '12px 8px', fontWeight: '600' }
+        }));
+
+        // Queries
+        row.appendChild(createElement('td', {
+            text: String(source.count || 0),
+            style: { color: '#e0e0e0', padding: '12px 8px' }
+        }));
+
+        // Thumbs up
+        row.appendChild(createElement('td', {
+            text: String(source.thumbs_up || 0),
+            style: { color: '#4CAF50', padding: '12px 8px' }
+        }));
+
+        // Thumbs down
+        row.appendChild(createElement('td', {
+            text: String(source.thumbs_down || 0),
+            style: { color: '#f44336', padding: '12px 8px' }
+        }));
+
+        // Regenerates
+        row.appendChild(createElement('td', {
+            text: String(source.regenerates || 0),
+            style: { color: '#FFC107', padding: '12px 8px' }
+        }));
+
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    section.appendChild(table);
+
+    return section;
+}
+
+/**
+ * Helper: Render user satisfaction section
+ */
+function renderUserSatisfactionSection(user) {
+    const section = createElement('div', {
+        className: 'analytics-section',
+        style: {
+            background: '#242424',
+            border: '1px solid #333',
+            borderRadius: '8px',
+            padding: '24px',
+            marginBottom: '24px'
+        }
+    });
+
+    section.appendChild(createElement('h3', {
+        text: '⭐ User Satisfaction',
+        style: { color: '#e0e0e0', margin: '0 0 20px 0' }
+    }));
+
+    if (user.overall) {
+        const overall = user.overall;
+        const metricsGrid = createElement('div', {
+            style: {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '12px',
+                background: '#1a1a1a',
+                padding: '16px',
+                borderRadius: '6px',
+                marginBottom: '20px'
+            }
+        });
+
+        const overallMetrics = [
+            { label: 'Total Queries', value: overall.total_queries || 0 },
+            { label: 'Total Ratings', value: overall.total_ratings || 0 },
+            { label: 'Avg Rating', value: `${(overall.avg_rating || 0).toFixed(2)} / 5`, color: (overall.avg_rating || 0) >= 4 ? '#4CAF50' : (overall.avg_rating >= 3 ? '#FFC107' : '#f44336') },
+            { label: 'Rating Rate', value: `${((overall.rating_rate || 0) * 100).toFixed(0)}%` }
+        ];
+
+        overallMetrics.forEach(metric => {
+            metricsGrid.appendChild(createElement('div', {
+                children: [
+                    createElement('div', {
+                        text: metric.label,
+                        style: { color: '#888', fontSize: '12px' }
+                    }),
+                    createElement('div', {
+                        text: String(metric.value),
+                        style: { color: metric.color || '#e0e0e0', fontSize: '20px', fontWeight: '600' }
+                    })
+                ]
+            }));
+        });
+
+        section.appendChild(metricsGrid);
+    }
+
+    return section;
+}
+
+/**
+ * Helper: Render memories panel (placeholder for now)
+ */
+function renderMemoriesPanel() {
+    const panel = document.querySelector('.chat-panel');
+    if (!panel) return;
+
+    panel.innerHTML = '';
+    panel.appendChild(createElement('div', {
+        style: { padding: '40px', textAlign: 'center' },
+        children: [
+            createElement('h2', { text: '💾 Memories', style: { color: '#4CAF50' } }),
+            createElement('p', { text: 'Memories view - Coming soon', style: { color: '#888' } })
+        ]
+    }));
+}
+
+/**
+ * Helper: Render conversations panel (placeholder for now)
+ */
+function renderConversationsPanel() {
+    const panel = document.querySelector('.chat-panel');
+    if (!panel) return;
+
+    panel.innerHTML = '';
+    panel.appendChild(createElement('div', {
+        style: { padding: '40px', textAlign: 'center' },
+        children: [
+            createElement('h2', { text: '💬 Conversations', style: { color: '#4CAF50' } }),
+            createElement('p', { text: 'Conversations view - Coming soon', style: { color: '#888' } })
+        ]
+    }));
+}
+
+/**
+ * Render the complete unified chat interface
+ */
+function renderApp() {
+    const root = document.getElementById('root');
+
+    // Create main container
+    const container = createElement('div', { className: 'unified-chat-container' });
+
+    // Sidebar (always visible for navigation)
+    const sidebar = createElement('div', { className: 'chat-sidebar' });
+    container.appendChild(sidebar);
+
+    // Main panel (content changes based on state.view)
+    const mainPanel = createElement('div', {
+        className: state.view === 'analytics' ? 'analytics-panel' : 'chat-panel'
+    });
+    container.appendChild(mainPanel);
+
+    // Clear root and append
+    root.innerHTML = '';
+    root.appendChild(container);
+
+    // Render sidebar (always)
+    renderSidebar();
+
+    // Render appropriate content based on view
+    switch (state.view) {
+        case 'ask':
+            renderAskPanel();
+            break;
+        case 'analytics':
+            renderAnalyticsPanel();
+            break;
+        case 'memories':
+            renderMemoriesPanel();
+            break;
+        case 'conversations':
+            renderConversationsPanel();
+            break;
+        case 'chat':
+        default:
+            renderChatPanel();
+            fetchConversations();
+            break;
+    }
+
+    console.log(`[Chat UI] View rendered: ${state.view}`);
+}
+
+// Render header
+function renderHeader() {
+    const statusClass = state.apiHealth.status === 'connected' ? '' : 'disconnected';
+
+    return `
+        <div class="header">
+            <h1>
+                <span class="status-indicator ${statusClass}"></span>
+                ACMS
+            </h1>
+            <div style="display: flex; gap: 8px;">
+                <button id="refresh-btn" class="btn btn-secondary">↻ Refresh</button>
+                <button id="conversations-btn" class="btn btn-secondary">💬 Conversations</button>
+                <button id="ask-btn" class="btn btn-secondary">🧠 Ask ACMS</button>
+                <button id="analytics-btn" class="btn btn-secondary">📈 Analytics</button>
+                <button id="stats-btn" class="btn btn-secondary">📊 Stats</button>
+                <button id="settings-btn" class="btn btn-secondary">⚙️ Settings</button>
+            </div>
+        </div>
+    `;
+}
+
+// Render search
+function renderSearch() {
+    return `
+        <div class="search-container">
+            <div class="search-box">
+                <select id="source-filter" class="search-input" style="flex: 0 0 180px;">
+                    <option value="">All Sources</option>
+                    <option value="gemini" ${state.sourceFilter === 'gemini' ? 'selected' : ''}>✨ Gemini</option>
+                    <option value="claude" ${state.sourceFilter === 'claude' ? 'selected' : ''}>🤖 Claude</option>
+                    <option value="chatgpt" ${state.sourceFilter === 'chatgpt' ? 'selected' : ''}>💬 ChatGPT</option>
+                    <option value="github" ${state.sourceFilter === 'github' ? 'selected' : ''}>🐙 GitHub</option>
+                    <option value="slack" ${state.sourceFilter === 'slack' ? 'selected' : ''}>💼 Slack</option>
+                    <option value="chrome" ${state.sourceFilter === 'chrome' ? 'selected' : ''}>🌐 Chrome</option>
+                    <option value="cursor" ${state.sourceFilter === 'cursor' ? 'selected' : ''}>⌨️ Cursor</option>
+                </select>
+                <input
+                    type="text"
+                    id="search-input"
+                    class="search-input"
+                    placeholder="Search memories..."
+                    value="${state.searchQuery}"
+                />
+                <button id="search-btn" class="btn">🔍 Search</button>
+                <button id="store-btn" class="btn">💾 Store</button>
+            </div>
+        </div>
+    `;
+}
+
+// Render error
+function renderError() {
+    return `
+        <div style="padding: 24px;">
+            <div class="error">${state.error}</div>
+        </div>
+    `;
+}
+
+// Render loading
+function renderLoading() {
+    return `
+        <div class="main-content">
+            <div class="loading">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    `;
+}
+
+// Render memories
+function renderMemories() {
+    if (state.memories.length === 0) {
+        return `
+            <div class="main-content">
+                <p style="text-align: center; color: #888; padding: 40px;">
+                    No memories found. ${state.searchQuery ? 'Try a different search.' : 'Start by storing some memories.'}
+                </p>
+            </div>
+        `;
+    }
+
+    const memoriesHTML = state.memories.map(memory => {
+        const crs = calculateCRS(memory);
+        const preview = memory.content.substring(0, 150) + (memory.content.length > 150 ? '...' : '');
+        const tags = memory.tags || [];
+        const created = new Date(memory.created_at).toLocaleString();
+        const privacyLevel = memory.privacy_level || 'INTERNAL';
+
+        // Extract source for badge
+        const source = getSourceInfo(tags, memory.metadata_json);
+        const sourceEmoji = source ? getSourceEmoji(source) : null;
+        const sourceColor = source ? getSourceColor(source) : null;
+        const sourceName = source ? getSourceDisplayName(source) : null;
+
+        return `
+            <div class="memory-card" data-memory-id="${memory.memory_id}" style="cursor: pointer;">
+                <div class="memory-header">
+                    <span class="memory-tier tier-${memory.tier}">${memory.tier}</span>
+                    <span class="memory-privacy" style="color: ${getPrivacyColor(privacyLevel)}; font-weight: 600;">
+                        ${getPrivacyEmoji(privacyLevel)} ${privacyLevel}
+                    </span>
+                    ${source ? `
+                        <span class="memory-source" style="color: ${sourceColor}; font-weight: 600; font-size: 11px; background: ${sourceColor}22; padding: 2px 8px; border-radius: 12px;">
+                            ${sourceEmoji} ${sourceName}
+                        </span>
+                    ` : ''}
+                    <span class="memory-crs">CRS: ${crs.toFixed(3)}</span>
+                    <button class="delete-memory-btn" data-memory-id="${memory.memory_id}" style="background: #ef4444; color: white; border: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; margin-left: auto;" title="Delete memory">🗑️ Delete</button>
+                </div>
+                <div class="memory-content">${preview}</div>
+                <div class="memory-meta">
+                    <span>Created: ${created}</span>
+                    <span>Phase: ${memory.phase || 'N/A'}</span>
+                </div>
+                ${tags.length > 0 ? `
+                    <div class="memory-tags">
+                        ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="main-content">
+            <div class="memory-list">
+                ${memoriesHTML}
+            </div>
+        </div>
+    `;
+}
+
+// Render settings
+function renderSettings() {
+    const weights = state.settings.crsWeights;
+
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <button id="back-to-memories-btn" class="btn btn-secondary">← Back to Memories</button>
+                <h2 style="margin: 0;">CRS Settings</h2>
+            </div>
+            <div class="settings-panel">
+                <div class="settings-row">
+                    <div>
+                        <div class="settings-label">Semantic Similarity Weight</div>
+                        <div class="settings-value">How much to value content matching</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="${weights.semantic}"
+                            class="slider crs-slider"
+                            data-factor="semantic"
+                        />
+                        <span id="semantic-value" style="min-width: 40px;">${weights.semantic.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <div>
+                        <div class="settings-label">Recency Weight</div>
+                        <div class="settings-value">How much to value recent memories</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="${weights.recency}"
+                            class="slider crs-slider"
+                            data-factor="recency"
+                        />
+                        <span id="recency-value" style="min-width: 40px;">${weights.recency.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="settings-row">
+                    <div>
+                        <div class="settings-label">Tier Weight</div>
+                        <div class="settings-value">How much to value memory tier (LONG/MID/SHORT)</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="${weights.tier}"
+                            class="slider crs-slider"
+                            data-factor="tier"
+                        />
+                        <span id="tier-value" style="min-width: 40px;">${weights.tier.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <p style="margin-top: 16px; color: #888; font-size: 12px;">
+                Note: Weights are automatically normalized to sum to 1.0
+            </p>
+        </div>
+    `;
+}
+
+// Render memory detail view
+function renderMemoryDetail() {
+    if (!state.selectedMemory) {
+        return `
+            <div class="main-content">
+                <p style="text-align: center; color: #888; padding: 40px;">
+                    No memory selected
+                </p>
+            </div>
+        `;
+    }
+
+    const memory = state.selectedMemory;
+    const created = new Date(memory.created_at).toLocaleString();
+    const updated = memory.updated_at ? new Date(memory.updated_at).toLocaleString() : 'Never';
+    const tags = memory.tags || [];
+    const privacyLevel = memory.privacy_level || 'INTERNAL';
+    const crs = memory.crs_score || 0;
+
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="margin-bottom: 24px;">
+                <button id="back-from-detail-btn" class="btn btn-secondary">← Back to Memories</button>
+            </div>
+
+            <div class="memory-card" style="cursor: default;">
+                <div class="memory-header">
+                    <span class="memory-tier tier-${memory.tier}">${memory.tier}</span>
+                    <span class="memory-privacy" style="color: ${getPrivacyColor(privacyLevel)}; font-weight: 600;">
+                        ${getPrivacyEmoji(privacyLevel)} ${privacyLevel}
+                    </span>
+                    <span class="memory-crs">CRS: ${crs.toFixed(3)}</span>
+                </div>
+
+                <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;">
+                    <div style="color: #6b7280; font-size: 12px; font-weight: 600; margin-bottom: 8px;">
+                        ${getPrivacyEmoji(privacyLevel)} Privacy Level
+                    </div>
+                    <div style="color: ${getPrivacyColor(privacyLevel)}; font-weight: 600; margin-bottom: 4px;">
+                        ${privacyLevel}
+                    </div>
+                    <div style="color: #6b7280; font-size: 13px;">
+                        ${getPrivacyDescription(privacyLevel)}
+                    </div>
+                </div>
+
+                <div style="margin: 16px 0;">
+                    <div style="color: #6b7280; font-size: 12px; font-weight: 600; margin-bottom: 8px;">
+                        FULL CONTENT
+                    </div>
+                    <div style="white-space: pre-wrap; color: #ffffff; line-height: 1.6;">
+                        ${memory.content}
+                    </div>
+                </div>
+
+                <div class="memory-meta" style="margin: 16px 0;">
+                    <div><strong>Memory ID:</strong> ${memory.memory_id}</div>
+                    <div><strong>Created:</strong> ${created}</div>
+                    <div><strong>Updated:</strong> ${updated}</div>
+                    <div><strong>Phase:</strong> ${memory.phase || 'N/A'}</div>
+                    <div><strong>Tier:</strong> ${memory.tier}</div>
+                    <div><strong>CRS Score:</strong> ${crs.toFixed(4)}</div>
+                </div>
+
+                ${tags.length > 0 ? `
+                    <div style="margin: 16px 0;">
+                        <div style="color: #6b7280; font-size: 12px; font-weight: 600; margin-bottom: 8px;">
+                            TAGS
+                        </div>
+                        <div class="memory-tags">
+                            ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${memory.metadata_json && Object.keys(memory.metadata_json).length > 0 ? `
+                    <div style="margin: 16px 0;">
+                        <div style="color: #6b7280; font-size: 12px; font-weight: 600; margin-bottom: 8px;">
+                            METADATA
+                        </div>
+                        <pre style="background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px;">
+${JSON.stringify(memory.metadata_json, null, 2)}</pre>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Render Ask ACMS view
+function renderAskView() {
+    const askState = state.askState;
+
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="margin-bottom: 24px;">
+                <button id="back-from-ask-btn" class="btn btn-secondary">← Back to Memories</button>
+            </div>
+
+            <div style="background: #242424; border: 1px solid #333; border-radius: 8px; padding: 24px;">
+                <h2 style="margin: 0 0 16px 0; color: #4CAF50;">🧠 Ask ACMS</h2>
+                <p style="color: #888; margin-bottom: 24px; font-size: 14px;">
+                    Ask questions about your stored memories. ACMS will search your memory store and synthesize an answer.
+                </p>
+
+                <div style="margin-bottom: 16px;">
+                    <label for="question-input" style="display: block; margin-bottom: 8px; color: #e0e0e0; font-weight: 600;">
+                        Your Question
+                    </label>
+                    <textarea
+                        id="question-input"
+                        placeholder="Example: What technologies does ACMS use? What did I discuss about Python?"
+                        style="width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #444; border-radius: 6px; color: #e0e0e0; font-size: 14px; min-height: 80px; font-family: inherit; resize: vertical;"
+                    >${askState.question}</textarea>
+                    <p style="margin-top: 4px; color: #666; font-size: 12px;">Press Enter to submit, Shift+Enter for new line</p>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input
+                            type="checkbox"
+                            id="include-confidential-checkbox"
+                            ${askState.includeConfidential ? 'checked' : ''}
+                            style="width: 16px; height: 16px; cursor: pointer;"
+                        />
+                        <span style="color: #e0e0e0; font-size: 14px;">
+                            Search all local memories (secrets always excluded)
+                        </span>
+                    </label>
+                    <p style="margin-top: 4px; margin-left: 24px; color: #666; font-size: 12px;">
+                        Checked: PUBLIC + INTERNAL + CONFIDENTIAL | Unchecked: PUBLIC + INTERNAL only
+                    </p>
+                </div>
+
+                <button id="submit-question-btn" class="btn" ${askState.loading ? 'disabled' : ''}>
+                    ${askState.loading ? '⏳ Thinking...' : '🔍 Ask'}
+                </button>
+            </div>
+
+            ${state.error ? `<div style="margin-top: 16px;"><div class="error">${state.error}</div></div>` : ''}
+
+            ${askState.loading ? `
+                <div style="margin-top: 24px;">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p id="loading-timer-text" style="color: #888; margin-top: 16px; font-size: 14px;">
+                            ⏱️ ${state.askState.loadingSeconds}s - Processing your question...
+                        </p>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${askState.answer ? `
+                <div style="margin-top: 24px; background: #242424; border: 1px solid #333; border-radius: 8px; padding: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <h3 style="margin: 0; color: #4CAF50;">💡 Answer</h3>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            ${askState.agentUsed ? `
+                                <span style="font-size: 10px; background: ${
+                                    askState.agentUsed === 'claude_sonnet' ? '#ff6b35' :
+                                    askState.agentUsed === 'chatgpt' ? '#10a37f' :
+                                    askState.agentUsed === 'gemini' ? '#4285F4' :
+                                    askState.agentUsed === 'claude_code' ? '#9333ea' : '#888'
+                                }; color: white; padding: 3px 8px; border-radius: 10px; font-weight: 600;">
+                                    ${
+                                        askState.agentUsed === 'claude_sonnet' ? '🤖 Claude' :
+                                        askState.agentUsed === 'chatgpt' ? '💬 ChatGPT' :
+                                        askState.agentUsed === 'gemini' ? '✨ Gemini' :
+                                        askState.agentUsed === 'claude_code' ? '💻 Code' :
+                                        askState.agentUsed
+                                    }
+                                </span>
+                            ` : ''}
+                            ${askState.intentDetected ? `
+                                <span style="font-size: 10px; background: #6366f1; color: white; padding: 3px 8px; border-radius: 10px; font-weight: 600;">
+                                    ${askState.intentDetected.charAt(0).toUpperCase() + askState.intentDetected.slice(1).toLowerCase()}
+                                </span>
+                            ` : ''}
+                            ${askState.cacheStatus ? `
+                                <span style="font-size: 10px; background: ${
+                                    askState.cacheStatus === 'cache_hit' || askState.cacheStatus === 'semantic_cache_hit' ? '#3b82f6' : '#10b981'
+                                }; color: white; padding: 3px 8px; border-radius: 10px; font-weight: 600;">
+                                    ${
+                                        askState.cacheStatus === 'cache_hit' ? '⚡ Cache' :
+                                        askState.cacheStatus === 'semantic_cache_hit' ? '✨ Semantic' :
+                                        askState.cacheStatus === 'fresh_generation' ? '🆕 Fresh' :
+                                        askState.cacheStatus
+                                    }
+                                </span>
+                            ` : ''}
+                            <span style="font-size: 11px; color: ${askState.confidence > 0.7 ? '#4CAF50' : (askState.confidence > 0.4 ? '#FFC107' : '#f44336')}; font-weight: 600;">
+                                ${(askState.confidence * 100).toFixed(0)}%
+                            </span>
+                        </div>
+                    </div>
+                    <div style="color: #e0e0e0; line-height: 1.6; white-space: pre-wrap; background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid #4CAF50;">
+                        ${askState.answer}
+                    </div>
+
+                    ${askState.analytics && askState.analytics.query_id ? `
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                            <div style="color: #888; font-size: 12px; margin-bottom: 12px; font-weight: 600;">📊 Analytics Trace</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 11px;">
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Query ID</div>
+                                    <div style="color: #FFC107; font-weight: 600; font-size: 9px; font-family: monospace;">
+                                        ${askState.analytics.query_id.substring(0, 8)}...
+                                    </div>
+                                </div>
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Total Latency</div>
+                                    <div style="color: #e0e0e0; font-weight: 600;">${askState.analytics.total_latency_ms.toFixed(0)}ms</div>
+                                </div>
+                                ${askState.analytics.search_latency_ms !== null ? `
+                                    <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                        <div style="color: #666;">Search</div>
+                                        <div style="color: #3b82f6; font-weight: 600;">${askState.analytics.search_latency_ms.toFixed(0)}ms</div>
+                                    </div>
+                                ` : ''}
+                                ${askState.analytics.llm_latency_ms !== null ? `
+                                    <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                        <div style="color: #666;">LLM</div>
+                                        <div style="color: #ff6b35; font-weight: 600;">${askState.analytics.llm_latency_ms.toFixed(0)}ms</div>
+                                    </div>
+                                ` : ''}
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Tokens</div>
+                                    <div style="color: #8b5cf6; font-weight: 600;">${askState.analytics.input_tokens || 0}/${askState.analytics.output_tokens || 0}</div>
+                                </div>
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Cost</div>
+                                    <div style="color: #10a37f; font-weight: 600;">$${(askState.analytics.est_cost_usd || 0).toFixed(4)}</div>
+                                </div>
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Memories</div>
+                                    <div style="color: #e0e0e0; font-weight: 600;">${askState.analytics.memories_searched}→${askState.analytics.memories_filtered}→${askState.analytics.memories_used}</div>
+                                </div>
+                                <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #666;">Cache</div>
+                                    <div style="color: ${askState.analytics.cache_hit ? '#4CAF50' : '#f44336'}; font-weight: 600;">${askState.analytics.cache_hit ? '✅ HIT' : '❌ MISS'}</div>
+                                </div>
+                                ${askState.analytics.cache_similarity !== null ? `
+                                    <div style="background: #1a1a1a; padding: 8px; border-radius: 4px;">
+                                        <div style="color: #666;">Similarity</div>
+                                        <div style="color: #FFC107; font-weight: 600;">${(askState.analytics.cache_similarity * 100).toFixed(0)}%</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div style="margin-top: 8px; font-size: 10px; color: #666;">
+                                Privacy: ${askState.analytics.privacy_filter.join(', ')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${askState.pipeline ? `
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                            <button id="toggle-pipeline-btn" class="btn btn-secondary" style="width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center;">
+                                <span>⚡ Pipeline Breakdown</span>
+                                <span style="font-size: 11px; color: #888;">
+                                    ${askState.pipelineExpanded ? '▼ Hide' : '▶ Show'}
+                                    (${askState.pipeline.total_latency_ms.toFixed(0)}ms · $${askState.pipeline.total_cost.toFixed(4)})
+                                </span>
+                            </button>
+                            ${askState.pipelineExpanded ? `
+                                <div style="margin-top: 16px;">
+                                    <!-- Timeline Visualization -->
+                                    <div style="margin-bottom: 20px;">
+                                        ${askState.pipeline.stages.map(stage => {
+                                            // Calculate bar width as percentage of total latency
+                                            const widthPercent = (stage.latency_ms / askState.pipeline.total_latency_ms) * 100;
+
+                                            // Color coding by stage
+                                            let barColor = '#888';
+                                            if (stage.name === 'cache_check') {
+                                                barColor = stage.status === 'hit' ? '#4CAF50' : '#666';
+                                            } else if (stage.name === 'search') {
+                                                barColor = '#3b82f6';
+                                            } else if (stage.name === 'llm_generation') {
+                                                barColor = stage.status === 'skipped' ? '#666' : '#8b5cf6';
+                                            }
+
+                                            // Stage icon
+                                            let stageIcon = '⚡';
+                                            if (stage.name === 'cache_check') {
+                                                stageIcon = stage.status === 'hit' ? '✅' : '❌';
+                                            } else if (stage.name === 'search') {
+                                                stageIcon = '🔍';
+                                            } else if (stage.name === 'llm_generation') {
+                                                stageIcon = stage.status === 'skipped' ? '⏭️' : '🤖';
+                                            }
+
+                                            // Stage label
+                                            let stageLabel = stage.name.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase());
+
+                                            return `
+                                                <div style="margin-bottom: 16px;">
+                                                    <!-- Stage Header -->
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                                        <div style="font-size: 12px; color: #e0e0e0; font-weight: 600;">
+                                                            ${stageIcon} ${stageLabel}
+                                                        </div>
+                                                        <div style="font-size: 11px; color: #888;">
+                                                            ${stage.latency_ms.toFixed(1)}ms ${stage.status === 'skipped' ? '(skipped)' : ''}
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Progress Bar -->
+                                                    <div style="width: 100%; height: 20px; background: #1a1a1a; border-radius: 4px; overflow: hidden; position: relative;">
+                                                        <div style="width: ${widthPercent}%; height: 100%; background: ${barColor}; border-radius: 4px; transition: width 0.3s ease;"></div>
+                                                    </div>
+
+                                                    <!-- Stage Details -->
+                                                    <div style="margin-top: 6px; font-size: 11px; color: #666; display: flex; flex-wrap: wrap; gap: 8px;">
+                                                        ${stage.name === 'cache_check' && stage.status === 'hit' ? `
+                                                            <span>💰 Saved: $${stage.cost_saved?.toFixed(4) || '0'}</span>
+                                                            <span>📝 Tokens: ${stage.tokens_saved || 0}</span>
+                                                        ` : ''}
+                                                        ${stage.name === 'search' ? `
+                                                            <span>📊 Results: ${stage.results_found || 0}</span>
+                                                            <span>🎯 Intent: ${stage.intent_detected || 'N/A'}</span>
+                                                            ${stage.sources_used ? `<span>🗂️ Sources: ${stage.sources_used.join(', ')}</span>` : ''}
+                                                        ` : ''}
+                                                        ${stage.name === 'llm_generation' && stage.status !== 'skipped' ? `
+                                                            <span>🤖 Model: ${stage.model_used || 'N/A'}</span>
+                                                            <span>📝 Tokens: ${stage.tokens_used || 0}</span>
+                                                            <span>💰 Cost: $${stage.cost?.toFixed(4) || '0'}</span>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+
+                                    <!-- Total Summary -->
+                                    <div style="padding: 12px; background: #1a1a1a; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                            <span style="color: #e0e0e0; font-weight: 600; font-size: 13px;">📊 Total Summary</span>
+                                        </div>
+                                        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px;">
+                                            <div>
+                                                <span style="color: #666;">Total Time:</span>
+                                                <span style="color: #e0e0e0; font-weight: 600; margin-left: 4px;">${(askState.pipeline.total_latency_ms / 1000).toFixed(2)}s</span>
+                                            </div>
+                                            <div>
+                                                <span style="color: #666;">Total Cost:</span>
+                                                <span style="color: #10a37f; font-weight: 600; margin-left: 4px;">$${askState.pipeline.total_cost.toFixed(4)}</span>
+                                            </div>
+                                            ${askState.pipeline.stages.find(s => s.name === 'cache_check' && s.status === 'hit') ? `
+                                                <div>
+                                                    <span style="color: #666;">Savings:</span>
+                                                    <span style="color: #4CAF50; font-weight: 600; margin-left: 4px;">
+                                                        $${askState.pipeline.stages.find(s => s.name === 'cache_check')?.cost_saved?.toFixed(4) || '0'}
+                                                    </span>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${askState.queryId ? `
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                            <div style="color: #888; font-size: 12px; margin-bottom: 8px; font-weight: 600;">Was this answer helpful?</div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="feedback-thumbs-up-btn" class="btn" ${state.feedbackGiven[askState.queryId] ? 'disabled' : ''} style="background: ${state.feedbackGiven[askState.queryId] === 'thumbs_up' ? '#4CAF50' : '#2a2a2a'};">
+                                    👍 Yes
+                                </button>
+                                <button id="feedback-thumbs-down-btn" class="btn" ${state.feedbackGiven[askState.queryId] ? 'disabled' : ''} style="background: ${state.feedbackGiven[askState.queryId] === 'thumbs_down' ? '#f44336' : '#2a2a2a'};">
+                                    👎 No
+                                </button>
+                                <button id="feedback-regenerate-btn" class="btn" ${state.feedbackGiven[askState.queryId] ? 'disabled' : ''} style="background: ${state.feedbackGiven[askState.queryId] === 'regenerate' ? '#FFC107' : '#2a2a2a'};">
+                                    🔄 Regenerate
+                                </button>
+                            </div>
+                            ${state.feedbackGiven[askState.queryId] ? `
+                                <div style="margin-top: 8px; color: #4CAF50; font-size: 12px;">
+                                    ✅ Feedback submitted: ${state.feedbackGiven[askState.queryId]}
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${askState.debugData ? `
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                            <button id="toggle-debug-btn" class="btn btn-secondary" style="width: 100%;">
+                                ${askState.debugExpanded ? '🔽 Hide' : '🔼 Show'} Debug API Inspector
+                            </button>
+                            ${askState.debugExpanded ? `
+                                <div style="margin-top: 12px;">
+                                    <div style="margin-bottom: 12px;">
+                                        <div style="color: #888; font-size: 11px; font-weight: 600; margin-bottom: 6px;">📤 REQUEST</div>
+                                        <pre style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #4CAF50; overflow-x: auto; font-size: 11px; color: #4CAF50; margin: 0;">${JSON.stringify(askState.debugData.request, null, 2)}</pre>
+                                    </div>
+                                    <div>
+                                        <div style="color: #888; font-size: 11px; font-weight: 600; margin-bottom: 6px;">📥 RESPONSE</div>
+                                        <pre style="background: #1a1a1a; padding: 12px; border-radius: 4px; border-left: 3px solid #3b82f6; overflow-x: auto; font-size: 11px; color: #3b82f6; margin: 0;">${JSON.stringify(askState.debugData.response, null, 2)}</pre>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+
+                ${askState.sources && askState.sources.length > 0 ? `
+                    <div style="margin-top: 24px;">
+                        <h3 style="color: #e0e0e0; margin-bottom: 16px;">📚 Sources (${askState.sources.length})</h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            ${askState.sources.map((source, index) => `
+                                <div class="memory-card source-card" data-memory-id="${source.memory_id}" style="cursor: pointer;">
+                                    <div class="memory-header">
+                                        <span style="color: #888; font-size: 12px;">Source ${index + 1}</span>
+                                        <span style="color: #4CAF50; font-weight: 600; font-size: 12px;">
+                                            Relevance: ${(source.relevance_score * 100).toFixed(0)}%
+                                        </span>
+                                        <span style="color: ${getPrivacyColor(source.privacy_level)}; font-weight: 600; font-size: 12px;">
+                                            ${getPrivacyEmoji(source.privacy_level)} ${source.privacy_level}
+                                        </span>
+                                    </div>
+                                    <div class="memory-content">${source.excerpt}...</div>
+                                    <div class="memory-meta">
+                                        <span>Created: ${new Date(source.created_at).toLocaleString()}</span>
+                                    </div>
+                                    ${source.tags.length > 0 ? `
+                                        <div class="memory-tags">
+                                            ${source.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <p style="margin-top: 12px; color: #666; font-size: 12px; text-align: center;">
+                            💡 Click any source to view full content
+                        </p>
+                    </div>
+                ` : ''}
+            ` : ''}
+        </div>
+    `;
+}
+
+// Week 4 Task 3: Render Analytics Dashboard
+function renderAnalyticsView() {
+    if (state.loading) {
+        return `
+            ${renderHeader()}
+            <div class="main-content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="color: #888; margin-top: 16px;">Loading analytics...</p>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!state.analyticsStats) {
+        return `
+            ${renderHeader()}
+            <div class="main-content">
+                <button id="back-from-analytics-btn" class="btn btn-secondary">← Back to Memories</button>
+                <p style="text-align: center; color: #888; padding: 40px;">
+                    No analytics data available
+                </p>
+            </div>
+        `;
+    }
+
+    const cache = state.analyticsStats.cache || {};
+    const user = state.analyticsStats.user || {};
+
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="margin-bottom: 24px;">
+                <button id="back-from-analytics-btn" class="btn btn-secondary">← Back to Memories</button>
+            </div>
+
+            <h2 style="color: #4CAF50; margin-bottom: 24px;">📈 Analytics Dashboard</h2>
+
+            <!-- Cache Performance -->
+            <div style="background: #242424; border: 1px solid #333; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+                <h3 style="color: #e0e0e0; margin: 0 0 20px 0;">⚡ Cache Performance</h3>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                        <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Total Queries</div>
+                        <div style="color: #e0e0e0; font-size: 28px; font-weight: 600;">${cache.total_queries || 0}</div>
+                    </div>
+
+                    <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid #10a37f;">
+                        <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Exact Cache Hits</div>
+                        <div style="color: #e0e0e0; font-size: 28px; font-weight: 600;">${cache.exact_cache_hits || 0}</div>
+                        <div style="color: #888; font-size: 11px; margin-top: 4px;">${((cache.exact_hit_rate || 0) * 100).toFixed(1)}% hit rate</div>
+                    </div>
+
+                    <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+                        <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Semantic Cache Hits</div>
+                        <div style="color: #e0e0e0; font-size: 28px; font-weight: 600;">${cache.semantic_cache_hits || 0}</div>
+                        <div style="color: #888; font-size: 11px; margin-top: 4px;">${((cache.semantic_hit_rate || 0) * 100).toFixed(1)}% hit rate</div>
+                    </div>
+
+                    <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid #FFC107;">
+                        <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Total Hit Rate</div>
+                        <div style="color: ${(cache.total_hit_rate || 0) > 0.4 ? '#4CAF50' : '#FFC107'}; font-size: 28px; font-weight: 600;">${((cache.total_hit_rate || 0) * 100).toFixed(1)}%</div>
+                        <div style="color: #888; font-size: 11px; margin-top: 4px;">Target: 40%+</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #333;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div style="background: #1a1a1a; padding: 16px; border-radius: 6px;">
+                            <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Avg Cache Hit Latency</div>
+                            <div style="color: #4CAF50; font-size: 20px; font-weight: 600;">${(cache.avg_latency_cache_hit_ms || 0).toFixed(0)}ms</div>
+                        </div>
+
+                        <div style="background: #1a1a1a; padding: 16px; border-radius: 6px;">
+                            <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Avg Cache Miss Latency</div>
+                            <div style="color: #f44336; font-size: 20px; font-weight: 600;">${(cache.avg_latency_cache_miss_ms || 0).toFixed(0)}ms</div>
+                        </div>
+
+                        <div style="background: #1a1a1a; padding: 16px; border-radius: 6px;">
+                            <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Est. Cost Savings</div>
+                            <div style="color: #4CAF50; font-size: 20px; font-weight: 600;">$${(cache.estimated_cost_savings_usd || 0).toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Feedback Stats -->
+            ${user.sources && user.sources.length > 0 ? `
+                <div style="background: #242424; border: 1px solid #333; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+                    <h3 style="color: #e0e0e0; margin: 0 0 20px 0;">⭐ Feedback Statistics (Last 30 Days)</h3>
+
+                    ${user.overall ? `
+                        <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; margin-bottom: 20px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                                <div>
+                                    <div style="color: #888; font-size: 12px;">Total Queries</div>
+                                    <div style="color: #e0e0e0; font-size: 20px; font-weight: 600;">${user.overall.total_queries || 0}</div>
+                                </div>
+                                <div>
+                                    <div style="color: #888; font-size: 12px;">Total Ratings</div>
+                                    <div style="color: #e0e0e0; font-size: 20px; font-weight: 600;">${user.overall.total_ratings || 0}</div>
+                                </div>
+                                <div>
+                                    <div style="color: #888; font-size: 12px;">Avg Rating</div>
+                                    <div style="color: ${(user.overall.avg_rating || 0) >= 4 ? '#4CAF50' : (user.overall.avg_rating >= 3 ? '#FFC107' : '#f44336')}; font-size: 20px; font-weight: 600;">${(user.overall.avg_rating || 0).toFixed(2)} / 5</div>
+                                </div>
+                                <div>
+                                    <div style="color: #888; font-size: 12px;">Rating Rate</div>
+                                    <div style="color: #e0e0e0; font-size: 20px; font-weight: 600;">${((user.overall.rating_rate || 0) * 100).toFixed(0)}%</div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div style="color: #888; font-size: 13px; font-weight: 600; margin-bottom: 12px;">Breakdown by Response Source</div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        ${user.sources.map(source => `
+                            <div style="background: #1a1a1a; padding: 16px; border-radius: 6px; border-left: 3px solid ${
+                                source.response_source === 'cache' ? '#3b82f6' :
+                                source.response_source === 'semantic_cache' ? '#8b5cf6' :
+                                source.response_source === 'claude' ? '#ff6b35' :
+                                source.response_source === 'chatgpt' ? '#10a37f' : '#888'
+                            };">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <span style="font-size: 14px; font-weight: 600; color: #e0e0e0;">
+                                        ${
+                                            source.response_source === 'cache' ? '⚡ Cache' :
+                                            source.response_source === 'semantic_cache' ? '✨ Semantic Cache' :
+                                            source.response_source === 'claude' ? '🤖 Claude' :
+                                            source.response_source === 'chatgpt' ? '💬 ChatGPT' :
+                                            source.response_source
+                                        }
+                                    </span>
+                                    <span style="color: ${(source.avg_rating || 0) >= 4 ? '#4CAF50' : (source.avg_rating >= 3 ? '#FFC107' : '#f44336')}; font-weight: 600;">
+                                        ${(source.avg_rating || 0).toFixed(2)} / 5
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 16px; font-size: 12px;">
+                                    <div>
+                                        <span style="color: #888;">Ratings:</span>
+                                        <span style="color: #e0e0e0; font-weight: 600; margin-left: 4px;">${source.count || 0}</span>
+                                    </div>
+                                    <div>
+                                        <span style="color: #4CAF50;">👍 ${source.thumbs_up || 0}</span>
+                                    </div>
+                                    <div>
+                                        <span style="color: #f44336;">👎 ${source.thumbs_down || 0}</span>
+                                    </div>
+                                    <div>
+                                        <span style="color: #FFC107;">🔄 ${source.regenerates || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : `
+                <div style="background: #242424; border: 1px solid #333; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+                    <h3 style="color: #e0e0e0; margin: 0 0 20px 0;">⭐ Feedback Statistics</h3>
+                    <p style="color: #888; text-align: center; padding: 40px;">
+                        No feedback data available yet. Start asking questions and providing feedback!
+                    </p>
+                </div>
+            `}
+        </div>
+    `;
+}
+
+
+// Render conversations list view
+function renderConversationsView() {
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
+                <button id="back-from-conversations-btn" class="btn btn-secondary">← Back to Memories</button>
+                <h2 style="margin: 0; color: #4CAF50;">💬 Imported Conversations</h2>
+                <select id="conversation-source-filter" class="search-input" style="flex: 0 0 180px; margin-left: auto;">
+                    <option value="">All Sources</option>
+                    <option value="chatgpt" ${state.conversationSourceFilter === 'chatgpt' ? 'selected' : ''}>💬 ChatGPT</option>
+                    <option value="claude" ${state.conversationSourceFilter === 'claude' ? 'selected' : ''}>🤖 Claude</option>
+                    <option value="gemini" ${state.conversationSourceFilter === 'gemini' ? 'selected' : ''}>✨ Gemini</option>
+                </select>
+            </div>
+
+            ${state.error ? `<div class="error">${state.error}</div>` : ''}
+
+            ${state.loading ? `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="color: #888; margin-top: 16px;">Loading conversations...</p>
+                </div>
+            ` : renderConversationsList()}
+        </div>
+    `;
+}
+
+// Render conversations list
+function renderConversationsList() {
+    if (state.conversations.length === 0) {
+        return `
+            <p style="text-align: center; color: #888; padding: 40px;">
+                No conversations found. ${state.conversationSourceFilter ? 'Try selecting a different source.' : 'Import some conversations to see them here.'}
+            </p>
+        `;
+    }
+
+    const conversationsHTML = state.conversations.map(conv => {
+        const created = new Date(conv.created_at).toLocaleString();
+        const sourceEmoji = getSourceEmoji(conv.source);
+        const sourceColor = getSourceColor(conv.source);
+        const sourceName = getSourceDisplayName(conv.source);
+
+        return `
+            <div class="conversation-card memory-card" data-thread-id="${conv.thread_id}" style="cursor: pointer;">
+                <div class="memory-header">
+                    <span style="color: ${sourceColor}; font-weight: 600; font-size: 13px;">
+                        ${sourceEmoji} ${sourceName}
+                    </span>
+                    <span style="color: #888; font-size: 12px;">${conv.turn_count} turns</span>
+                    <span style="color: #888; font-size: 12px;">${created}</span>
+                </div>
+                <div class="memory-content" style="font-size: 15px; font-weight: 600; color: #e0e0e0;">
+                    ${conv.title}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div style="margin-bottom: 16px; color: #888; font-size: 13px;">
+            Showing ${state.conversations.length} conversation${state.conversations.length !== 1 ? 's' : ''}
+        </div>
+        <div class="memory-list">
+            ${conversationsHTML}
+        </div>
+    `;
+}
+
+// Render conversation detail view
+function renderConversationDetail() {
+    if (!state.selectedConversation) {
+        return `
+            ${renderHeader()}
+            <div class="main-content">
+                <p style="text-align: center; color: #888; padding: 40px;">
+                    No conversation selected
+                </p>
+            </div>
+        `;
+    }
+
+    const conv = state.selectedConversation;
+    const created = new Date(conv.created_at).toLocaleString();
+    const sourceEmoji = getSourceEmoji(conv.source);
+    const sourceColor = getSourceColor(conv.source);
+    const sourceName = getSourceDisplayName(conv.source);
+    const turns = conv.turns || [];
+
+    return `
+        ${renderHeader()}
+        <div class="main-content">
+            <div style="margin-bottom: 24px;">
+                <button id="back-from-conversation-detail-btn" class="btn btn-secondary">← Back to Conversations</button>
+            </div>
+
+            <div class="memory-card" style="cursor: default;">
+                <div class="memory-header">
+                    <span style="color: ${sourceColor}; font-weight: 600; font-size: 14px;">
+                        ${sourceEmoji} ${sourceName}
+                    </span>
+                    <span style="color: #888; font-size: 12px;">${conv.turn_count} turns</span>
+                    <span style="color: #888; font-size: 12px;">${created}</span>
+                </div>
+                <div style="font-size: 18px; font-weight: 600; color: #4CAF50; margin: 16px 0;">
+                    ${conv.title}
+                </div>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <h3 style="color: #e0e0e0; margin-bottom: 16px;">Conversation (${turns.length} turns)</h3>
+                ${turns.length > 0 ? renderConversationTurns(turns) : '<p style="color: #888;">No turns available</p>'}
+            </div>
+        </div>
+    `;
+}
+
+// Render conversation turns
+function renderConversationTurns(turns) {
+    return turns.map((turn, index) => {
+        const isUser = turn.role === 'user';
+        const bgColor = isUser ? '#1a3a4a' : '#2a2a2a';
+        const borderColor = isUser ? '#3b82f6' : '#4CAF50';
+        const icon = isUser ? '👤' : '🤖';
+
+        return `
+            <div style="background: ${bgColor}; border-left: 3px solid ${borderColor}; padding: 16px; border-radius: 6px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 16px;">${icon}</span>
+                    <span style="font-weight: 600; color: ${borderColor}; text-transform: uppercase; font-size: 11px;">
+                        ${turn.role}
+                    </span>
+                    <span style="color: #666; font-size: 11px; margin-left: auto;">
+                        Turn ${turn.turn_number}
+                    </span>
+                </div>
+                <div style="color: #e0e0e0; line-height: 1.6; white-space: pre-wrap;">
+                    ${turn.content}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+
+// Start the app
+init();

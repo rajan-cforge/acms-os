@@ -1,0 +1,568 @@
+/* ==========================================================================
+   Reports Dashboard Styles
+   Sprint 5: Reports & Insights - Frontend
+
+   Uses design tokens from design-tokens.css
+   ========================================================================== */
+
+/* ==========================================================================
+   CONTAINER
+   ========================================================================== */
+
+.reports-container {
+    padding: var(--space-6);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+
+.reports-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-5);
+}
+
+.reports-header h2 {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: var(--font-weight-bold);
+}
+
+.week-selector {
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-small);
+    min-width: 200px;
+}
+
+/* ==========================================================================
+   TABS
+   ========================================================================== */
+
+.reports-tabs {
+    display: flex;
+    gap: var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--space-5);
+}
+
+.reports-tabs .tab-btn {
+    padding: var(--space-3) var(--space-4);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.reports-tabs .tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.reports-tabs .tab-btn.active {
+    color: var(--accent-green);
+    border-bottom-color: var(--accent-green);
+}
+
+/* ==========================================================================
+   DASHBOARD GRID
+   ========================================================================== */
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    padding: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.stat-card.primary {
+    background: linear-gradient(135deg, var(--accent-green), #45a049);
+    border: none;
+    color: white;
+}
+
+.stat-card.primary .stat-label {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-icon {
+    font-size: 28px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+}
+
+.stat-card.primary .stat-icon {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: var(--text-heading);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.stat-card.primary .stat-value {
+    color: white;
+}
+
+.stat-label {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   HIGHLIGHTS
+   ========================================================================== */
+
+.highlights-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    padding: var(--space-5);
+}
+
+.highlights-section h3 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+.highlights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.highlight-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+}
+
+.highlight-icon {
+    font-size: var(--text-heading);
+}
+
+.highlight-text {
+    color: var(--text-primary);
+    font-size: var(--text-body);
+}
+
+/* ==========================================================================
+   WEEKLY REPORT
+   ========================================================================== */
+
+.weekly-report {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.report-header-section {
+    text-align: center;
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.report-period {
+    font-size: var(--text-heading);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.report-summary {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-3);
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+}
+
+.summary-divider {
+    color: var(--text-tertiary);
+}
+
+.report-sections {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+}
+
+.report-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    padding: var(--space-4);
+}
+
+.report-section h3 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+/* Topics List */
+.topics-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.topic-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+}
+
+.topic-rank {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-green);
+    color: white;
+    border-radius: var(--radius-full);
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-bold);
+}
+
+.topic-name {
+    flex: 1;
+    font-size: var(--text-small);
+    color: var(--text-primary);
+}
+
+.topic-count {
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+.topic-trend {
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-medium);
+    min-width: 50px;
+    text-align: right;
+}
+
+.topic-trend.up { color: var(--accent-green); }
+.topic-trend.down { color: var(--accent-red); }
+.topic-trend.stable { color: var(--text-tertiary); }
+
+/* Agents List */
+.agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.agent-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.agent-name {
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+.agent-bar {
+    height: 8px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.agent-bar-fill {
+    height: 100%;
+    background: var(--accent-green);
+    border-radius: var(--radius-full);
+    transition: width var(--duration-normal) var(--ease-out);
+}
+
+.agent-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+/* Knowledge Metrics */
+.knowledge-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.metric-item {
+    text-align: center;
+    padding: var(--space-3);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+}
+
+.metric-value {
+    font-size: var(--text-heading);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    display: block;
+}
+
+.metric-label {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   TOPIC TRENDS
+   ========================================================================== */
+
+.topics-trends {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.trends-header h3 {
+    margin: 0;
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+.top-topics-chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.topic-bar-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.topic-bar-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.topic-bar-container {
+    flex: 1;
+    height: 24px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.topic-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+    border-radius: var(--radius-md);
+    transition: width var(--duration-normal) var(--ease-out);
+}
+
+.topic-bar-value {
+    width: 50px;
+    text-align: right;
+    font-size: var(--text-small);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+}
+
+/* Daily Activity */
+.daily-activity {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 200px;
+    padding: var(--space-4) 0;
+    gap: var(--space-2);
+}
+
+.day-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.day-bar {
+    width: 100%;
+    max-width: 40px;
+    background: var(--accent-green);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    min-height: 4px;
+    transition: height var(--duration-normal) var(--ease-out);
+}
+
+.day-label {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+    margin-top: var(--space-2);
+}
+
+.day-value {
+    font-size: var(--text-micro);
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* ==========================================================================
+   INSIGHTS
+   ========================================================================== */
+
+.insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.insight-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-left: 4px solid;
+    border-radius: var(--card-radius);
+    padding: var(--space-4);
+}
+
+.insight-card.pattern { border-left-color: var(--accent-blue); }
+.insight-card.recommendation { border-left-color: var(--accent-green); }
+.insight-card.observation { border-left-color: var(--accent-purple); }
+
+.insight-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2);
+}
+
+.insight-type-badge {
+    font-size: var(--text-micro);
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    text-transform: capitalize;
+}
+
+.insight-date {
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+.insight-title {
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.insight-description {
+    font-size: var(--text-small);
+    color: var(--text-secondary);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-3);
+}
+
+.insight-footer {
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-micro);
+    color: var(--text-tertiary);
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .reports-container {
+        padding: var(--space-4);
+    }
+
+    .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .report-sections {
+        grid-template-columns: 1fr;
+    }
+
+    .topic-bar-label {
+        width: 120px;
+    }
+
+    .daily-activity {
+        height: 150px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-bar-fill,
+    .topic-bar-fill,
+    .day-bar {
+        transition: none;
+    }
+}

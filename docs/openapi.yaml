@@ -1,0 +1,803 @@
+openapi: 3.1.0
+info:
+  title: ACMS API
+  description: |
+    Adaptive Context Memory System REST API.
+
+    Provides endpoints for:
+    - Memory management (CRUD)
+    - Semantic search
+    - AI-assisted question answering
+    - Feedback collection
+    - Analytics and reporting
+    - Conversation management
+  version: 2.0.0
+  contact:
+    name: ACMS Team
+
+servers:
+  - url: http://localhost:40080
+    description: Local development server
+  - url: http://localhost:8080
+    description: Desktop app server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Memories
+    description: Memory CRUD operations
+  - name: Search
+    description: Semantic search endpoints
+  - name: Ask
+    description: AI-assisted question answering
+  - name: Feedback
+    description: User feedback collection
+  - name: Cache
+    description: Cache management
+  - name: Analytics
+    description: Analytics and reporting
+  - name: Chat
+    description: Unified chat interface
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Basic health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness check with component status
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: All components ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Some components unhealthy
+
+  /memories:
+    get:
+      tags: [Memories]
+      summary: List memories
+      operationId: listMemories
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: privacy_level
+          in: query
+          schema:
+            type: string
+            enum: [PUBLIC, INTERNAL, CONFIDENTIAL, LOCAL_ONLY]
+      responses:
+        '200':
+          description: List of memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Memory'
+
+    post:
+      tags: [Memories]
+      summary: Create a memory
+      operationId: createMemory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryCreate'
+      responses:
+        '200':
+          description: Memory created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryCreateResponse'
+        '400':
+          description: Invalid input
+
+  /memories/{memory_id}:
+    get:
+      tags: [Memories]
+      summary: Get a specific memory
+      operationId: getMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Memory'
+        '404':
+          description: Memory not found
+
+    put:
+      tags: [Memories]
+      summary: Update a memory
+      operationId: updateMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryUpdate'
+      responses:
+        '200':
+          description: Memory updated
+        '404':
+          description: Memory not found
+
+    delete:
+      tags: [Memories]
+      summary: Delete a memory
+      operationId: deleteMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory deleted
+        '404':
+          description: Memory not found
+
+  /api/v2/memories:
+    post:
+      tags: [Memories]
+      summary: Create memory with quality gate (V2)
+      operationId: createMemoryV2
+      description: |
+        Creates a typed memory with quality validation.
+        The quality gate checks for Q&A pollution and assigns a confidence score.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryCreateV2'
+      responses:
+        '200':
+          description: Memory created with quality assessment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryCreateV2Response'
+        '400':
+          description: Memory rejected by quality gate
+
+  /memories/count:
+    get:
+      tags: [Memories]
+      summary: Get memory count
+      operationId: getMemoryCount
+      responses:
+        '200':
+          description: Memory count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+
+  /search:
+    post:
+      tags: [Search]
+      summary: Semantic search
+      operationId: semanticSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+
+  /ask:
+    post:
+      tags: [Ask]
+      summary: Ask a question
+      operationId: ask
+      description: |
+        Processes a user question through the full pipeline:
+        1. Intent classification
+        2. Memory retrieval
+        3. LLM generation
+        4. Response formatting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+      responses:
+        '200':
+          description: AI-generated answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+
+  /gateway/ask:
+    post:
+      tags: [Ask]
+      summary: Gateway ask with streaming
+      operationId: gatewayAsk
+      description: Multi-LLM gateway with streaming response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayAskRequest'
+      responses:
+        '200':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /feedback:
+    post:
+      tags: [Feedback]
+      summary: Submit feedback
+      operationId: submitFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '200':
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+
+  /feedback/summary/{query_id}:
+    get:
+      tags: [Feedback]
+      summary: Get feedback summary for a query
+      operationId: getFeedbackSummary
+      parameters:
+        - name: query_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Feedback statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackStats'
+
+  /cache/stats:
+    get:
+      tags: [Cache]
+      summary: Get cache statistics
+      operationId: getCacheStats
+      responses:
+        '200':
+          description: Cache statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheStats'
+
+  /cache/clear:
+    post:
+      tags: [Cache]
+      summary: Clear cache
+      operationId: clearCache
+      responses:
+        '200':
+          description: Cache cleared
+
+  /analytics/dashboard:
+    get:
+      tags: [Analytics]
+      summary: Get analytics dashboard data
+      operationId: getAnalyticsDashboard
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+
+  /chat/conversations:
+    get:
+      tags: [Chat]
+      summary: List conversations
+      operationId: listConversations
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+
+    post:
+      tags: [Chat]
+      summary: Create conversation
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreate'
+      responses:
+        '200':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /chat/conversations/{conversation_id}:
+    get:
+      tags: [Chat]
+      summary: Get conversation
+      operationId: getConversation
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+    delete:
+      tags: [Chat]
+      summary: Delete conversation
+      operationId: deleteConversation
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation deleted
+
+  /chat/conversations/{conversation_id}/messages:
+    post:
+      tags: [Chat]
+      summary: Send message in conversation
+      operationId: sendMessage
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Message sent and response generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendMessageResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy]
+        timestamp:
+          type: string
+          format: date-time
+
+    ReadinessResponse:
+      type: object
+      required: [ready, components]
+      properties:
+        ready:
+          type: boolean
+        components:
+          type: object
+          properties:
+            database:
+              type: boolean
+            redis:
+              type: boolean
+            weaviate:
+              type: boolean
+
+    Memory:
+      type: object
+      required: [id, content, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        memory_type:
+          type: string
+          enum: [SEMANTIC, EPISODIC, DOCUMENT, CACHE_ENTRY]
+        privacy_level:
+          type: string
+          enum: [PUBLIC, INTERNAL, CONFIDENTIAL, LOCAL_ONLY]
+        created_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    MemoryCreate:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+        privacy_level:
+          type: string
+          enum: [PUBLIC, INTERNAL, CONFIDENTIAL, LOCAL_ONLY]
+          default: INTERNAL
+        metadata:
+          type: object
+
+    MemoryCreateV2:
+      type: object
+      required: [content, memory_type]
+      properties:
+        content:
+          type: string
+          minLength: 1
+        memory_type:
+          type: string
+          enum: [SEMANTIC, EPISODIC, DOCUMENT, CACHE_ENTRY]
+        source:
+          type: string
+        privacy_level:
+          type: string
+          enum: [PUBLIC, INTERNAL, CONFIDENTIAL, LOCAL_ONLY]
+          default: INTERNAL
+        metadata:
+          type: object
+
+    MemoryCreateResponse:
+      type: object
+      properties:
+        memory_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+
+    MemoryCreateV2Response:
+      type: object
+      required: [memory_id, status, quality_score]
+      properties:
+        memory_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [stored, rejected]
+        quality_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        quality_reason:
+          type: string
+
+    MemoryUpdate:
+      type: object
+      properties:
+        content:
+          type: string
+        privacy_level:
+          type: string
+          enum: [PUBLIC, INTERNAL, CONFIDENTIAL, LOCAL_ONLY]
+        metadata:
+          type: object
+
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+        limit:
+          type: integer
+          default: 10
+          maximum: 100
+        threshold:
+          type: number
+          default: 0.5
+
+    SearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              memory_id:
+                type: string
+                format: uuid
+              content:
+                type: string
+              similarity:
+                type: number
+        total:
+          type: integer
+
+    AskRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+        context_limit:
+          type: integer
+          default: 5
+        include_sources:
+          type: boolean
+          default: true
+        user_id:
+          type: string
+          format: uuid
+
+    AskResponse:
+      type: object
+      required: [answer, query_id]
+      properties:
+        answer:
+          type: string
+        query_id:
+          type: string
+          format: uuid
+        sources:
+          type: array
+          items:
+            type: string
+        model_used:
+          type: string
+        cache_hit:
+          type: boolean
+        latency_ms:
+          type: number
+
+    GatewayAskRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        agent:
+          type: string
+          enum: [claude_sonnet, chatgpt, gemini]
+        context_limit:
+          type: integer
+        conversation_id:
+          type: string
+          format: uuid
+
+    FeedbackRequest:
+      type: object
+      required: [query_id, rating]
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+        memory_helpful:
+          type: boolean
+        sources_accurate:
+          type: boolean
+
+    FeedbackResponse:
+      type: object
+      properties:
+        feedback_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+
+    FeedbackStats:
+      type: object
+      properties:
+        query_id:
+          type: string
+          format: uuid
+        avg_rating:
+          type: number
+        total_feedback:
+          type: integer
+        memory_helpful_rate:
+          type: number
+        sources_accurate_rate:
+          type: number
+
+    CacheStats:
+      type: object
+      properties:
+        exact_cache:
+          type: object
+          properties:
+            entries:
+              type: integer
+            hit_rate:
+              type: number
+        semantic_cache:
+          type: object
+          properties:
+            entries:
+              type: integer
+            hit_rate:
+              type: number
+
+    DashboardData:
+      type: object
+      properties:
+        total_queries:
+          type: integer
+        total_memories:
+          type: integer
+        avg_response_time_ms:
+          type: number
+        cache_hit_rate:
+          type: number
+        top_topics:
+          type: array
+          items:
+            type: object
+
+    ConversationCreate:
+      type: object
+      properties:
+        title:
+          type: string
+        agent:
+          type: string
+
+    ConversationResponse:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+
+    ConversationListResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationResponse'
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+        agent:
+          type: string
+
+    SendMessageResponse:
+      type: object
+      properties:
+        message_id:
+          type: string
+          format: uuid
+        response:
+          type: string
+        model_used:
+          type: string

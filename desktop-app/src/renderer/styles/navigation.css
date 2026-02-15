@@ -1,0 +1,371 @@
+/* ==========================================================================
+   Navigation & Settings Styles
+   Sprint 6: Polish & Integration
+
+   Uses design tokens from design-tokens.css
+   ========================================================================== */
+
+/* ==========================================================================
+   MAIN NAVIGATION
+   ========================================================================== */
+
+.main-nav {
+    width: 240px;
+    height: 100vh;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-4);
+    overflow-y: auto;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.brand-icon {
+    font-size: 28px;
+}
+
+.brand-text {
+    font-size: var(--text-heading);
+    font-weight: var(--font-weight-bold);
+    color: var(--accent-green);
+}
+
+.nav-section {
+    margin-bottom: var(--space-4);
+}
+
+.nav-section-title {
+    font-size: var(--text-micro);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3) var(--space-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-body);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+    text-align: left;
+}
+
+.nav-item:hover {
+    background: var(--bg-active);
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    background: var(--accent-green);
+    color: var(--text-inverse);
+}
+
+.nav-icon {
+    font-size: var(--text-body);
+    width: 24px;
+    text-align: center;
+}
+
+.nav-label {
+    flex: 1;
+}
+
+.nav-spacer {
+    flex: 1;
+}
+
+/* ==========================================================================
+   SETTINGS
+   ========================================================================== */
+
+.settings-container {
+    padding: var(--space-6);
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.settings-header {
+    margin-bottom: var(--space-6);
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: var(--text-title);
+    font-weight: var(--font-weight-bold);
+}
+
+.settings-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.settings-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    padding: var(--space-5);
+}
+
+.settings-section h3 {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-info {
+    flex: 1;
+    margin-right: var(--space-4);
+}
+
+.setting-label {
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.setting-description {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.setting-select {
+    min-width: 180px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-body);
+}
+
+/* ==========================================================================
+   TOGGLE SWITCH
+   ========================================================================== */
+
+.toggle {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+
+.toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full);
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background: var(--text-tertiary);
+    border-radius: var(--radius-full);
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.toggle input:checked + .toggle-slider {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+.toggle input:checked + .toggle-slider::before {
+    transform: translateX(22px);
+    background: white;
+}
+
+/* ==========================================================================
+   CONNECTIONS
+   ========================================================================== */
+
+.connections-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+}
+
+.connection-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-4);
+    background: var(--bg-overlay);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.connection-icon {
+    font-size: 32px;
+    margin-bottom: var(--space-2);
+}
+
+.connection-name {
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.connection-status {
+    font-size: var(--text-small);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.connection-status.loading {
+    color: var(--text-tertiary);
+    background: var(--bg-surface);
+}
+
+.connection-status.connected {
+    color: var(--accent-green);
+    background: rgba(76, 175, 80, 0.15);
+}
+
+.connection-status.disconnected {
+    color: var(--text-tertiary);
+    background: var(--bg-surface);
+}
+
+.connection-status.error {
+    color: var(--accent-red);
+    background: rgba(244, 67, 54, 0.15);
+}
+
+/* ==========================================================================
+   ABOUT
+   ========================================================================== */
+
+.about-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.about-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-2) 0;
+}
+
+.about-label {
+    font-size: var(--text-small);
+    color: var(--text-tertiary);
+}
+
+.about-value {
+    font-size: var(--text-small);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   APP LAYOUT
+   ========================================================================== */
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-sidebar {
+    flex-shrink: 0;
+}
+
+.app-content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-default);
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .main-nav {
+        width: 60px;
+        padding: var(--space-2);
+    }
+
+    .nav-brand .brand-text,
+    .nav-section-title,
+    .nav-label {
+        display: none;
+    }
+
+    .nav-item {
+        justify-content: center;
+        padding: var(--space-3);
+    }
+
+    .nav-icon {
+        margin: 0;
+    }
+
+    .connections-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-item,
+    .toggle-slider,
+    .toggle-slider::before {
+        transition: none;
+    }
+}

@@ -1,0 +1,220 @@
+/* ==========================================================================
+   ACMS Design Tokens
+   Sprint 1: Foundation
+
+   This file defines all CSS custom properties (variables) used throughout
+   the ACMS desktop application. All styles should use these tokens instead
+   of hardcoded values to ensure consistency.
+
+   Based on 8px grid system and WCAG AA color contrast requirements.
+   ========================================================================== */
+
+:root {
+  /* ==========================================================================
+     TYPOGRAPHY
+     ========================================================================== */
+
+  /* Font Family */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono',
+               Consolas, monospace;
+
+  /* Font Sizes (based on modular scale) */
+  --text-hero: 32px;     /* Page titles, report headlines */
+  --text-h1: 24px;       /* Section headers */
+  --text-h2: 18px;       /* Card titles, view headers */
+  --text-h3: 16px;       /* Subsection headers */
+  --text-body: 15px;     /* Primary content */
+  --text-small: 13px;    /* Metadata, timestamps */
+  --text-micro: 11px;    /* Badges, labels */
+
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Font Weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ==========================================================================
+     SPACING (8px Grid)
+     ========================================================================== */
+
+  --space-1: 4px;        /* Inline spacing, tight gaps */
+  --space-2: 8px;        /* Base unit, small gaps */
+  --space-3: 12px;       /* Element padding */
+  --space-4: 16px;       /* Card padding, medium gaps */
+  --space-5: 24px;       /* Section spacing */
+  --space-6: 32px;       /* View padding */
+  --space-7: 48px;       /* Section gaps */
+  --space-8: 64px;       /* Page margins */
+
+  /* ==========================================================================
+     COLORS - BACKGROUNDS
+     Dark theme with depth hierarchy
+     ========================================================================== */
+
+  --bg-app: #0D0D0D;           /* Deepest layer - app background */
+  --bg-surface: #141414;        /* Cards, panels */
+  --bg-elevated: #1A1A1A;       /* Floating elements, modals */
+  --bg-overlay: #242424;        /* Hover states, inputs */
+  --bg-active: #2A2A2A;         /* Active/pressed states */
+
+  /* ==========================================================================
+     COLORS - TEXT
+     Hierarchy through opacity/brightness
+     ========================================================================== */
+
+  --text-primary: #F5F5F5;      /* Main content - high contrast */
+  --text-secondary: #A0A0A0;    /* Descriptions, less important */
+  --text-tertiary: #666666;     /* Timestamps, hints */
+  --text-disabled: #4A4A4A;     /* Disabled states */
+  --text-inverse: #0D0D0D;      /* Text on light backgrounds */
+
+  /* ==========================================================================
+     COLORS - ACCENTS (Semantic)
+     ========================================================================== */
+
+  /* Success / Positive */
+  --accent-green: #4CAF50;
+  --accent-green-light: #81C784;
+  --accent-green-dark: #388E3C;
+
+  /* Information / Links */
+  --accent-blue: #2196F3;
+  --accent-blue-light: #64B5F6;
+  --accent-blue-dark: #1976D2;
+
+  /* Intelligence / AI */
+  --accent-purple: #9333EA;
+  --accent-purple-light: #A855F7;
+  --accent-purple-dark: #7C3AED;
+
+  /* Warning / Pending */
+  --accent-orange: #FF9800;
+  --accent-orange-light: #FFB74D;
+  --accent-orange-dark: #F57C00;
+
+  /* Error / Negative */
+  --accent-red: #EF4444;
+  --accent-red-light: #F87171;
+  --accent-red-dark: #DC2626;
+
+  /* ==========================================================================
+     COLORS - BORDERS
+     Subtle borders using alpha for consistency
+     ========================================================================== */
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-emphasis: rgba(255, 255, 255, 0.16);
+  --border-focus: rgba(76, 175, 80, 0.5);
+
+  /* ==========================================================================
+     SHADOWS
+     Elevation hierarchy
+     ========================================================================== */
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.25);
+
+  /* Glow effects for emphasis */
+  --shadow-glow: 0 0 20px rgba(76, 175, 80, 0.15);
+  --shadow-glow-blue: 0 0 20px rgba(33, 150, 243, 0.15);
+  --shadow-glow-purple: 0 0 20px rgba(147, 51, 234, 0.15);
+
+  /* ==========================================================================
+     BORDER RADIUS
+     ========================================================================== */
+
+  --radius-sm: 4px;      /* Buttons, badges */
+  --radius-md: 8px;      /* Inputs, small cards */
+  --radius-lg: 12px;     /* Cards, panels */
+  --radius-xl: 16px;     /* Modals, large containers */
+  --radius-full: 9999px; /* Pills, circles */
+
+  /* ==========================================================================
+     TRANSITIONS & ANIMATIONS
+     ========================================================================== */
+
+  /* Easing functions */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Durations */
+  --duration-instant: 50ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+
+  /* ==========================================================================
+     Z-INDEX SCALE
+     ========================================================================== */
+
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-tooltip: 600;
+  --z-toast: 700;
+
+  /* ==========================================================================
+     COMPONENT-SPECIFIC TOKENS
+     ========================================================================== */
+
+  /* Cards */
+  --card-padding: var(--space-4);
+  --card-radius: var(--radius-lg);
+  --card-border: 1px solid var(--border-subtle);
+  --card-shadow: var(--shadow-sm);
+  --card-shadow-hover: var(--shadow-md);
+
+  /* Inputs */
+  --input-height: 40px;
+  --input-padding-x: var(--space-3);
+  --input-radius: var(--radius-md);
+  --input-border: 1px solid var(--border-default);
+  --input-bg: var(--bg-overlay);
+
+  /* Buttons */
+  --btn-height: 36px;
+  --btn-padding-x: var(--space-4);
+  --btn-radius: var(--radius-sm);
+
+  /* Confidence Indicators */
+  --confidence-high: var(--accent-green);
+  --confidence-medium: var(--accent-blue);
+  --confidence-low: var(--accent-orange);
+  --confidence-none: var(--accent-red);
+}
+
+/* ==========================================================================
+   DARK THEME (Default)
+   Already defined above in :root
+   ========================================================================== */
+
+/* ==========================================================================
+   REDUCED MOTION
+   Respect user preferences for reduced motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACMS ChatGPT Capture</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #333;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      margin-right: 8px;
+    }
+
+    .status-indicator.disconnected {
+      background: #ef4444;
+    }
+
+    .status-indicator.disabled {
+      background: #6b7280;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #2a2a2a;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+      background: #4b5563;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .toggle-switch.active {
+      background: #10b981;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(24px);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat-card {
+      background: #2a2a2a;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #10b981;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .button {
+      width: 100%;
+      padding: 10px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 8px;
+    }
+
+    .button:hover {
+      background: #2563eb;
+    }
+
+    .button.secondary {
+      background: #4b5563;
+    }
+
+    .button.secondary:hover {
+      background: #374151;
+    }
+
+    .info-text {
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    .status-message {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .status-message.success {
+      background: #10b98120;
+      color: #10b981;
+      border: 1px solid #10b981;
+    }
+
+    .status-message.error {
+      background: #ef444420;
+      color: #ef4444;
+      border: 1px solid #ef4444;
+    }
+
+    .status-message.info {
+      background: #3b82f620;
+      color: #3b82f6;
+      border: 1px solid #3b82f6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ACMS Capture</h1>
+    <div class="status-indicator" id="status-indicator"></div>
+  </div>
+
+  <div id="status-message" class="status-message" style="display: none;"></div>
+
+  <div class="section">
+    <div class="section-title">Capture Control</div>
+    <div class="toggle-container">
+      <span class="toggle-label">Auto-Capture</span>
+      <div class="toggle-switch" id="capture-toggle">
+        <div class="toggle-slider"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Capture Statistics</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-success">0</div>
+        <div class="stat-label">Success</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-failed">0</div>
+        <div class="stat-label">Failed</div>
+      </div>
+    </div>
+    <div class="info-text" id="last-capture">
+      No captures yet
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="button" id="capture-now-btn">Capture Now</button>
+    <button class="button secondary" id="reset-stats-btn">Reset Statistics</button>
+  </div>
+
+  <div class="info-text">
+    ACMS automatically captures ChatGPT conversations with privacy controls. All conversations are classified using AI-powered privacy detection.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

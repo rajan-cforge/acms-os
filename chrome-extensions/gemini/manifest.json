@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "ACMS Gemini Capture",
+  "version": "1.0.0",
+  "description": "Automatically capture Google Gemini conversations to ACMS with privacy controls",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://gemini.google.com/*",
+    "http://localhost:40080/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gemini.google.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
