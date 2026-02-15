@@ -27,7 +27,7 @@ ACMS is a self-hosted AI memory system that turns your conversations, emails, an
 ### One-Command Install
 
 ```bash
-git clone https://github.com/rajan-cforge/acms-os.git && cd acms && ./install.sh
+git clone https://github.com/rajan-cforge/acms-os.git && cd acms-os && ./install.sh
 ```
 
 That's it! The installer will:
@@ -43,7 +43,7 @@ If you prefer step-by-step:
 ```bash
 # Clone the repository
 git clone https://github.com/rajan-cforge/acms-os.git
-cd acms
+cd acms-os
 
 # Copy environment template
 cp .env.example .env
@@ -85,11 +85,9 @@ OPENAI_API_KEY=sk-...         # GPT
 GEMINI_API_KEY=AI...          # Gemini (has free tier)
 ```
 
-### With Integrations
+### With Integrations (Optional)
 
-See the docs for setting up:
-- [Gmail Integration](docs/GMAIL_SETUP.md)
-- [Financial Tracking](docs/PLAID_SETUP.md)
+Gmail and financial tracking integrations are available but require additional setup. See the `.env.example` file for required API keys.
 
 ## 🏗️ Architecture
 
@@ -115,11 +113,11 @@ See the docs for setting up:
 
 ## 📖 Documentation
 
-- [Quick Start Guide](docs/QUICK_START.md)
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [API Reference](docs/API.md)
+- [API Reference](API.md)
+- [OpenAPI Spec](docs/openapi.yaml)
 - [Contributing](CONTRIBUTING.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Privacy Policy](docs/PRIVACY_POLICY.md)
+- [Security Policy](docs/SECURITY_POLICY.md)
 
 ## 🤝 Contributing
 
