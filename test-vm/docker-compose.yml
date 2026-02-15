@@ -1,0 +1,31 @@
+# =============================================================================
+# ACMS Test VM - Docker Compose
+# =============================================================================
+# Runs an Ubuntu desktop VM for testing ACMS installation
+#
+# Usage:
+#   cd test-vm
+#   docker compose up -d
+#   Open: http://localhost:6080
+#
+# Login: acms / acms123
+# =============================================================================
+
+services:
+  acms-test-vm:
+    build: .
+    container_name: acms-test-vm
+    hostname: acms-test
+    privileged: true  # Required for Docker-in-Docker
+    ports:
+      - "6080:80"      # noVNC web interface
+      - "5900:5900"    # VNC direct (optional)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker
+      - acms-test-home:/home/acms  # Persist home directory
+    environment:
+      - VNC_RESOLUTION=1280x800
+    restart: unless-stopped
+
+volumes:
+  acms-test-home:
