@@ -1,11 +1,13 @@
 # =============================================================================
 # ACMS Test VM - Docker Compose
 # =============================================================================
-# Runs an Ubuntu desktop VM for testing ACMS installation
+# Runs a fully isolated Ubuntu desktop VM for testing ACMS installation.
+# The VM has its own Docker daemon (Docker-in-Docker) - completely separate
+# from your host machine.
 #
 # Usage:
 #   cd test-vm
-#   docker compose up -d
+#   docker compose up -d --build
 #   Open: http://localhost:6080
 #
 # Login: acms / acms123
@@ -15,17 +17,20 @@ services:
   acms-test-vm:
     build: .
     container_name: acms-test-vm
-    hostname: acms-test
+    hostname: acms-test-vm
     privileged: true  # Required for Docker-in-Docker
     ports:
-      - "6080:80"      # noVNC web interface
+      - "6080:80"      # noVNC web interface (desktop UI)
       - "5900:5900"    # VNC direct (optional)
+      # Note: ACMS ports (40080, 40432, etc.) stay INSIDE the VM
+      # Access them via the VM's browser, not from your Mac
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker
-      - acms-test-home:/home/acms  # Persist home directory
+      - acms-test-home:/home/acms           # Persist home directory
+      - acms-test-docker:/var/lib/docker    # Persist Docker data inside VM
     environment:
       - VNC_RESOLUTION=1280x800
     restart: unless-stopped
 
 volumes:
   acms-test-home:
+  acms-test-docker:
