@@ -2,7 +2,7 @@ services:
   # PostgreSQL 16+ - Metadata storage
   postgres:
     image: postgres:16-alpine
-    container_name: acms_postgres
+    container_name: ${ACMS_PREFIX:-acms}_postgres
     environment:
       POSTGRES_DB: acms
       POSTGRES_USER: acms
@@ -24,7 +24,7 @@ services:
   # Redis 7.0+ - Caching layer
   redis:
     image: redis:7-alpine
-    container_name: acms_redis
+    container_name: ${ACMS_PREFIX:-acms}_redis
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "40379:6379"
@@ -42,7 +42,7 @@ services:
   # Weaviate v4 - Vector database (NEW dedicated instance for ACMS)
   weaviate:
     image: semitechnologies/weaviate:1.27.4
-    container_name: acms_weaviate
+    container_name: ${ACMS_PREFIX:-acms}_weaviate
     ports:
       - "40480:8080"
       - "40481:50051"  # gRPC
@@ -63,7 +63,7 @@ services:
   # Ollama - Local LLM inference (Docker container)
   ollama:
     image: ollama/ollama:latest
-    container_name: acms_ollama
+    container_name: ${ACMS_PREFIX:-acms}_ollama
     ports:
       - "40434:11434"
     volumes:
@@ -78,7 +78,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     image: acms-api:latest
-    container_name: acms_api
+    container_name: ${ACMS_PREFIX:-acms}_api
     ports:
       - "40080:40080"
     environment:
