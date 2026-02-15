@@ -78,6 +78,10 @@ RUN mkdir -p /home/$USER/.vnc && \
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
+# Fix permissions for home directory (needed when volume is mounted)\n\
+chown -R acms:acms /home/acms\n\
+rm -f /home/acms/.Xauthority /home/acms/.ICEauthority 2>/dev/null\n\
+\n\
 # Start Docker daemon in background\n\
 echo "Starting Docker daemon..."\n\
 dockerd > /var/log/dockerd.log 2>&1 &\n\
@@ -92,12 +96,12 @@ for i in {1..30}; do\n\
     sleep 2\n\
 done\n\
 \n\
-# Start VNC server\n\
+# Start VNC server as acms user\n\
 export USER=acms\n\
 export HOME=/home/acms\n\
 cd $HOME\n\
 su - acms -c "vncserver :1 -geometry 1280x800 -depth 24 -localhost no" &\n\
-sleep 2\n\
+sleep 3\n\
 \n\
 # Start noVNC web interface\n\
 websockify --web=/usr/share/novnc/ 80 localhost:5901 &\n\
