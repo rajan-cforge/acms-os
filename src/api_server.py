@@ -122,12 +122,19 @@ app.include_router(reports_router)
 # Cognitive Architecture (Feb 2026)
 app.include_router(cognitive_router)
 
-# Initialize MemoryCRUD, Claude generator, Query Cache, Semantic Cache, and Gateway Orchestrator
+# Initialize MemoryCRUD, Query Cache, Semantic Cache, and Gateway Orchestrator
 crud = MemoryCRUD()
-claude = ClaudeGenerator()
 query_cache = QueryCache()
 semantic_cache = get_semantic_cache()
 gateway = get_gateway_orchestrator()
+
+# Initialize Claude generator (optional - only if ANTHROPIC_API_KEY is set)
+claude = None
+try:
+    claude = ClaudeGenerator()
+    print("[API] Claude generator initialized")
+except ValueError as e:
+    print(f"[API] Claude generator not available (no API key): {e}")
 
 # Initialize Quality Validator (Week 5 Task 1: Pollution Prevention)
 quality_validator = QualityValidator()
