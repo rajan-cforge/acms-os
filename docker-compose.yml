@@ -169,13 +169,14 @@ services:
 
     restart: unless-stopped
 
-    # Resource limits for production stability
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 512M
+    # Note: Resource limits removed for Docker-in-Docker compatibility
+    # Uncomment below for production with native Docker:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 2G
+    #     reservations:
+    #       memory: 512M
 
 networks:
   acms_network:
