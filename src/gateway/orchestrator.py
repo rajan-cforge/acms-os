@@ -171,14 +171,27 @@ class GatewayOrchestrator:
             self.knowledge_preflight = None
             logger.info("⚠️ Knowledge Preflight disabled (set ENABLE_KNOWLEDGE_PREFLIGHT=true to enable)")
 
-        # Agent pool
-        self.agents = {
-            AgentType.CLAUDE_SONNET: ClaudeSonnetAgent(),
-            AgentType.CHATGPT: ChatGPTAgent(),
-            AgentType.GEMINI: GeminiAgent(),
-            AgentType.CLAUDE_CODE: ClaudeCodeAgent(),
-            AgentType.OLLAMA: OllamaAgent()
-        }
+        # Agent pool - agents are optional based on API key availability
+        self.agents = {}
+
+        # Initialize each agent with graceful fallback
+        agent_configs = [
+            (AgentType.CLAUDE_SONNET, ClaudeSonnetAgent, "ANTHROPIC_API_KEY"),
+            (AgentType.CHATGPT, ChatGPTAgent, "OPENAI_API_KEY"),
+            (AgentType.GEMINI, GeminiAgent, "GEMINI_API_KEY"),
+            (AgentType.CLAUDE_CODE, ClaudeCodeAgent, "ANTHROPIC_API_KEY"),
+            (AgentType.OLLAMA, OllamaAgent, None),  # Ollama doesn't need API key
+        ]
+
+        for agent_type, agent_class, required_key in agent_configs:
+            try:
+                if required_key and not os.getenv(required_key):
+                    logger.info(f"⚠️ {agent_type.value} agent not available ({required_key} not set)")
+                    continue
+                self.agents[agent_type] = agent_class()
+                logger.info(f"✅ {agent_type.value} agent initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize {agent_type.value}: {e}")
 
         # NEW: Knowledge Extractor (Dec 2025) - Replaces old FactExtractor
         # Extracts intent, entities, topics, and facts using Claude Sonnet 4
