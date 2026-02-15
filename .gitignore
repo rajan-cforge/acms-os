@@ -51,12 +51,22 @@ logs/
 # Personal files
 *-feedback.md
 downloaded-data/
+*.pdf
 
 # Claude Code
 .claude/
 
 # Test artifacts
 tests/latest.json
+pii_results.json
+baseline_quick_test.json
+
+# SQLite databases
+*.db
+
+# Temporary/corrupt files
+out
+=*
 
 # Docker
 docker-compose.override.yml
