@@ -17,18 +17,32 @@ ACMS is a self-hosted AI memory system that turns your conversations, emails, an
 - **📊 Cognitive Dashboard** - Track your expertise and knowledge gaps
 - **🔍 Semantic Search** - Find anything by meaning, not just keywords
 
-## 🚀 Quick Start (5 minutes)
+## 🚀 Quick Start (2 minutes)
 
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) or [Podman](https://podman.io/)
 - 8GB RAM minimum (16GB recommended)
 
-### Installation
+### One-Command Install
+
+```bash
+git clone https://github.com/acms-ai/acms.git && cd acms && ./install.sh
+```
+
+That's it! The installer will:
+- ✅ Check prerequisites (Docker/Podman)
+- ✅ Generate encryption keys
+- ✅ Start all services
+- ✅ Wait for health checks
+
+### Manual Installation
+
+If you prefer step-by-step:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/acms.git
+git clone https://github.com/acms-ai/acms.git
 cd acms
 
 # Copy environment template
