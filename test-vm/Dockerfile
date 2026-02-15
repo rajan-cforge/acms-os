@@ -100,8 +100,8 @@ RUN echo '#!/bin/bash\n\
 # Run these commands to test the installation:\n\
 \n\
 # 1. Clone the repo\n\
-git clone https://github.com/YOUR_USERNAME/acms.git\n\
-cd acms\n\
+git clone https://github.com/rajan-cforge/acms-os.git\n\
+cd acms-os\n\
 \n\
 # 2. Run installer\n\
 ./install.sh\n\
