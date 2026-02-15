@@ -97,8 +97,8 @@ if [ ! -f "docker-compose.yml" ]; then
     echo -e "${YELLOW}Cloning ACMS repository...${NC}"
 
     if command -v git &> /dev/null; then
-        git clone https://github.com/acms-ai/acms.git
-        cd acms
+        git clone https://github.com/rajan-cforge/acms-os.git
+        cd acms-os
         echo -e "  ${GREEN}✓${NC} Repository cloned"
     else
         echo -e "  ${RED}✗${NC} Git not found. Please install git or download manually."

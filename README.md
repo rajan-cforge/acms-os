@@ -27,7 +27,7 @@ ACMS is a self-hosted AI memory system that turns your conversations, emails, an
 ### One-Command Install
 
 ```bash
-git clone https://github.com/acms-ai/acms.git && cd acms && ./install.sh
+git clone https://github.com/rajan-cforge/acms-os.git && cd acms && ./install.sh
 ```
 
 That's it! The installer will:
@@ -42,7 +42,7 @@ If you prefer step-by-step:
 
 ```bash
 # Clone the repository
-git clone https://github.com/acms-ai/acms.git
+git clone https://github.com/rajan-cforge/acms-os.git
 cd acms
 
 # Copy environment template
