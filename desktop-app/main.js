@@ -14,9 +14,10 @@ function createWindow() {
     minHeight: 400,
     title: 'ACMS - Adaptive Context Memory System',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true
+      nodeIntegration: true,  // Required for current renderer architecture
+      contextIsolation: false, // TODO: Migrate to contextIsolation: true with preload
+      // Note: Full security hardening requires refactoring renderer to use contextBridge
+      // See preload.js for the secure API pattern when ready to migrate
     },
     icon: path.join(__dirname, 'assets', 'icon.png')
   });
