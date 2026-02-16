@@ -87,40 +87,69 @@ class LoadTester:
         self.base_url = base_url
         self.results: List[Dict[str, Any]] = []
         self.errors: List[Dict[str, Any]] = []
-        self.user_id = "test-user-load"
+        # Use a valid UUID for test user to avoid DB errors
+        self.user_id = "00000000-0000-0000-0000-000000000001"
 
     async def get_available_agents(self) -> List[str]:
-        """Get list of available agents."""
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(f"{self.base_url}/api/agents")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return [a["id"] for a in data.get("agents", [])]
-            except Exception as e:
-                print(f"Error getting agents: {e}")
-        return ["ollama"]  # Default fallback
+        """Get list of available agents by testing with a simple query."""
+        # Known agent values for manual_agent field
+        # Format: {display_name: api_value}
+        known_agents = {
+            "ollama": "ollama",
+            "claude": "claude_sonnet",
+            "openai": "chatgpt",
+            "gemini": "gemini",
+        }
+        available = []
 
-    async def send_chat(self, query: str, agent: str = "auto") -> Dict[str, Any]:
+        print("Checking available agents...")
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for name, api_value in known_agents.items():
+                try:
+                    resp = await client.post(
+                        f"{self.base_url}/gateway/ask-sync",
+                        json={
+                            "query": "Say hello",
+                            "user_id": "00000000-0000-0000-0000-000000000002",
+                            "manual_agent": api_value,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        agent_used = data.get("agent_used", api_value)
+                        available.append(api_value)
+                        print(f"  ✓ {name} ({api_value}) available - used: {agent_used}")
+                    else:
+                        error = resp.text[:100] if resp.text else f"status {resp.status_code}"
+                        print(f"  ✗ {name}: {error}")
+                except Exception as e:
+                    print(f"  ✗ {name} error: {str(e)[:50]}")
+
+        return available if available else ["ollama"]
+
+    async def send_chat(self, query: str, agent: str = "ollama") -> Dict[str, Any]:
         """Send a chat message and collect response."""
         start_time = time.time()
 
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                # Use the /ask endpoint (non-streaming for simplicity)
+                # Use the /gateway/ask endpoint
+                payload = {
+                    "query": query,
+                    "user_id": self.user_id,
+                }
+                if agent and agent != "auto":
+                    payload["manual_agent"] = agent
+
                 response = await client.post(
-                    f"{self.base_url}/ask",
-                    json={
-                        "query": query,
-                        "user_id": self.user_id,
-                        "agent": agent,
-                    },
+                    f"{self.base_url}/gateway/ask-sync",
+                    json=payload,
                 )
 
                 if response.status_code != 200:
                     return {
                         "success": False,
-                        "error": f"HTTP {response.status_code}",
+                        "error": f"HTTP {response.status_code}: {response.text[:100]}",
                         "query": query,
                         "agent": agent,
                         "latency_ms": (time.time() - start_time) * 1000,
@@ -131,8 +160,11 @@ class LoadTester:
                     "success": True,
                     "query": query,
                     "agent": agent,
+                    "agent_used": data.get("agent_used", agent),
                     "response_length": len(data.get("answer", "")),
-                    "latency_ms": (time.time() - start_time) * 1000,
+                    "latency_ms": data.get("latency_ms", (time.time() - start_time) * 1000),
+                    "from_cache": data.get("from_cache", False),
+                    "cost_usd": data.get("cost_usd", 0),
                 }
 
         except Exception as e:
@@ -287,6 +319,7 @@ async def main():
     parser.add_argument("--count", type=int, default=100, help="Number of queries")
     parser.add_argument("--agent", type=str, default=None, help="Specific agent to test")
     parser.add_argument("--all-agents", action="store_true", help="Test all available agents")
+    parser.add_argument("--skip-check", action="store_true", help="Skip agent availability check")
     parser.add_argument("--concurrent", type=int, default=5, help="Concurrent requests")
 
     args = parser.parse_args()
@@ -295,7 +328,12 @@ async def main():
 
     # Get agents
     if args.all_agents:
-        agents = await tester.get_available_agents()
+        if args.skip_check:
+            # Use known agents without checking availability
+            agents = ["ollama", "claude_sonnet", "chatgpt", "gemini"]
+            print("Using all agents (skipping availability check)")
+        else:
+            agents = await tester.get_available_agents()
     elif args.agent:
         agents = [args.agent]
     else:
