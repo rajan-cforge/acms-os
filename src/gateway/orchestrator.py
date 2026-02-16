@@ -193,6 +193,9 @@ class GatewayOrchestrator:
             except Exception as e:
                 logger.warning(f"Failed to initialize {agent_type.value}: {e}")
 
+        # Update agent selector with available agents
+        self.agent_selector.set_available_agents(list(self.agents.keys()))
+
         # NEW: Knowledge Extractor (Dec 2025) - Replaces old FactExtractor
         # Extracts intent, entities, topics, and facts using Claude Sonnet 4
         self.enable_knowledge_extraction = os.getenv("ENABLE_KNOWLEDGE_EXTRACTION", "true").lower() == "true"

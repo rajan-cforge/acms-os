@@ -30,10 +30,21 @@ AGENT_ROUTING = {
 class AgentSelector:
     """Selects the best agent for a given intent."""
 
-    def __init__(self):
-        """Initialize agent selector with routing rules."""
+    def __init__(self, available_agents: Optional[list] = None):
+        """Initialize agent selector with routing rules.
+
+        Args:
+            available_agents: List of AgentType that are actually initialized
+        """
         self.routing = AGENT_ROUTING
-        logger.info("AgentSelector initialized with %d routing rules", len(self.routing))
+        self.available_agents = available_agents or []
+        logger.info("AgentSelector initialized with %d routing rules, %d available agents",
+                    len(self.routing), len(self.available_agents))
+
+    def set_available_agents(self, available_agents: list):
+        """Update available agents list."""
+        self.available_agents = available_agents
+        logger.info("Available agents updated: %s", [a.value for a in available_agents])
 
     def select_agent(
         self,
@@ -50,20 +61,48 @@ class AgentSelector:
             AgentType: Selected agent
 
         Routing Logic:
-            1. If manual_override provided, use it
-            2. Otherwise, use AGENT_ROUTING map
-            3. Default to CLAUDE_SONNET if intent not found
+            1. If manual_override provided and available, use it
+            2. Otherwise, use AGENT_ROUTING map if agent available
+            3. Fall back to first available agent (prefer Ollama)
+            4. Default to OLLAMA as last resort
         """
-        # Manual override takes precedence
+        # Manual override takes precedence (if available)
         if manual_override:
-            logger.info(
-                "Manual agent override: %s (ignoring intent: %s)",
-                manual_override.value, intent.value
-            )
-            return manual_override
+            if not self.available_agents or manual_override in self.available_agents:
+                logger.info(
+                    "Manual agent override: %s (ignoring intent: %s)",
+                    manual_override.value, intent.value
+                )
+                return manual_override
+            else:
+                logger.warning(
+                    "Manual override %s not available, falling back",
+                    manual_override.value
+                )
 
         # Use routing map
-        agent = self.routing.get(intent, AgentType.CLAUDE_SONNET)
+        preferred_agent = self.routing.get(intent, AgentType.CLAUDE_SONNET)
+
+        # Check if preferred agent is available
+        if self.available_agents and preferred_agent not in self.available_agents:
+            # Fall back to Ollama if available, otherwise first available
+            if AgentType.OLLAMA in self.available_agents:
+                agent = AgentType.OLLAMA
+                logger.info(
+                    "Preferred agent %s not available, using Ollama for intent: %s",
+                    preferred_agent.value, intent.value
+                )
+            elif self.available_agents:
+                agent = self.available_agents[0]
+                logger.info(
+                    "Preferred agent %s not available, using %s for intent: %s",
+                    preferred_agent.value, agent.value, intent.value
+                )
+            else:
+                agent = AgentType.OLLAMA
+                logger.warning("No agents available, defaulting to Ollama")
+        else:
+            agent = preferred_agent
 
         logger.info(
             "Agent selected: %s for intent: %s",
