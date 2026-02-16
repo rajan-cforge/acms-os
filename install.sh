@@ -120,23 +120,20 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
     echo -e "  ${GREEN}✓${NC} Created .env from template"
 
-    # Generate security keys
+    # Generate security keys (postgres password uses fixed default from .env.example)
     if command -v python3 &> /dev/null; then
         TOKEN_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
         ENCRYPTION_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-        POSTGRES_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
 
         # Update .env with generated keys
         if [[ "$OSTYPE" == "darwin"* ]]; then
             sed -i '' "s/^ACMS_TOKEN_SECRET=$/ACMS_TOKEN_SECRET=$TOKEN_SECRET/" .env
             sed -i '' "s/^ACMS_ENCRYPTION_KEY=$/ACMS_ENCRYPTION_KEY=$ENCRYPTION_KEY/" .env
-            sed -i '' "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$POSTGRES_PASS/" .env
         else
             sed -i "s/^ACMS_TOKEN_SECRET=$/ACMS_TOKEN_SECRET=$TOKEN_SECRET/" .env
             sed -i "s/^ACMS_ENCRYPTION_KEY=$/ACMS_ENCRYPTION_KEY=$ENCRYPTION_KEY/" .env
-            sed -i "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$POSTGRES_PASS/" .env
         fi
-        echo -e "  ${GREEN}✓${NC} Generated security keys (token, encryption, database)"
+        echo -e "  ${GREEN}✓${NC} Generated security keys (token, encryption)"
     fi
 else
     echo -e "  ${GREEN}✓${NC} .env already exists"
