@@ -107,10 +107,53 @@ class LoadTester:
 
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
+                # Use the /ask endpoint (non-streaming for simplicity)
+                response = await client.post(
+                    f"{self.base_url}/ask",
+                    json={
+                        "query": query,
+                        "user_id": self.user_id,
+                        "agent": agent,
+                    },
+                )
+
+                if response.status_code != 200:
+                    return {
+                        "success": False,
+                        "error": f"HTTP {response.status_code}",
+                        "query": query,
+                        "agent": agent,
+                        "latency_ms": (time.time() - start_time) * 1000,
+                    }
+
+                data = response.json()
+                return {
+                    "success": True,
+                    "query": query,
+                    "agent": agent,
+                    "response_length": len(data.get("answer", "")),
+                    "latency_ms": (time.time() - start_time) * 1000,
+                }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "query": query,
+                "agent": agent,
+                "latency_ms": (time.time() - start_time) * 1000,
+            }
+
+    async def send_chat_streaming(self, query: str, agent: str = "auto") -> Dict[str, Any]:
+        """Send a chat message with streaming (alternate method)."""
+        start_time = time.time()
+
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 # Use streaming endpoint
                 async with client.stream(
                     "POST",
-                    f"{self.base_url}/gateway/chat/stream",
+                    f"{self.base_url}/gateway/ask",
                     json={
                         "query": query,
                         "user_id": self.user_id,
