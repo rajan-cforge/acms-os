@@ -18,22 +18,45 @@ depends_on = None
 
 def upgrade():
     """
-    Add from_cache column to query_history table to support feedback on cached responses.
+    Create query_history table and add from_cache column.
 
     This migration supports Week 5 Day 3: Enable feedback on cached responses
     by adding:
+    - query_history table for tracking queries
     - from_cache: Boolean indicating if response came from semantic cache
     - Index for analytics queries on cached vs fresh responses
-
-    Backfills existing data based on response_source:
-    - response_source = 'semantic_cache' → from_cache = TRUE
-    - All other values → from_cache = FALSE
     """
+
+    # Create query_history table first (if not exists)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS query_history (
+            query_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            query_text TEXT NOT NULL,
+            response_text TEXT,
+            response_source VARCHAR(50) DEFAULT 'fresh',
+            confidence_score FLOAT DEFAULT 0.0,
+            latency_ms FLOAT DEFAULT 0.0,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            metadata JSONB DEFAULT '{}'::jsonb
+        )
+    """)
+
+    # Create indexes for query_history
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_query_history_user_id
+        ON query_history(user_id)
+    """)
+
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_query_history_created_at
+        ON query_history(created_at DESC)
+    """)
 
     # Add from_cache column (default FALSE for fresh responses)
     op.execute("""
         ALTER TABLE query_history
-        ADD COLUMN from_cache BOOLEAN DEFAULT FALSE NOT NULL
+        ADD COLUMN IF NOT EXISTS from_cache BOOLEAN DEFAULT FALSE NOT NULL
     """)
 
     # Backfill existing data: Mark semantic_cache entries as from_cache=TRUE
@@ -44,15 +67,14 @@ def upgrade():
     """)
 
     # Create index for analytics on cached responses
-    # Simple index without time filter (PostgreSQL requires IMMUTABLE functions in WHERE)
     op.execute("""
-        CREATE INDEX idx_query_history_cache_status
+        CREATE INDEX IF NOT EXISTS idx_query_history_cache_status
         ON query_history(from_cache, created_at DESC)
     """)
 
     # Create index for feedback analysis on cached responses
     op.execute("""
-        CREATE INDEX idx_query_history_cached_with_feedback
+        CREATE INDEX IF NOT EXISTS idx_query_history_cached_with_feedback
         ON query_history(query_id, from_cache)
         WHERE from_cache = TRUE
     """)

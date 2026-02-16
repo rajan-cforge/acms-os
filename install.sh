@@ -168,13 +168,46 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
 done
 
 if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-    echo -e "  ${YELLOW}⚠${NC} API not responding yet. Check logs with: $COMPOSE_CMD logs acms_api"
+    echo -e "  ${YELLOW}⚠${NC} API not responding yet. Check logs with: $COMPOSE_CMD logs api"
 fi
 
 # Check other services
 echo ""
 echo -e "${YELLOW}Service Status:${NC}"
 $COMPOSE_CMD ps --format "table {{.Name}}\t{{.Status}}"
+
+echo ""
+
+# -----------------------------------------------------------------------------
+# Run Database Migrations
+# -----------------------------------------------------------------------------
+
+echo -e "${YELLOW}Running database migrations...${NC}"
+$CONTAINER_CMD exec acms_api alembic upgrade head 2>&1 | tail -5
+echo -e "  ${GREEN}✓${NC} Database migrations complete"
+
+echo ""
+
+# -----------------------------------------------------------------------------
+# Create Default User
+# -----------------------------------------------------------------------------
+
+echo -e "${YELLOW}Setting up default user...${NC}"
+$CONTAINER_CMD exec acms_postgres psql -U acms -d acms -c "INSERT INTO users (user_id, username, email, display_name, is_active, is_admin) VALUES (gen_random_uuid(), 'default', 'default@acms.local', 'Default User', true, true) ON CONFLICT (email) DO NOTHING;" > /dev/null 2>&1
+echo -e "  ${GREEN}✓${NC} Default user ready (default@acms.local)"
+
+echo ""
+
+# -----------------------------------------------------------------------------
+# Pull Ollama Models
+# -----------------------------------------------------------------------------
+
+echo -e "${YELLOW}Downloading Ollama models (this may take a few minutes)...${NC}"
+echo "  Pulling llama3.2 for chat..."
+$CONTAINER_CMD exec acms_ollama ollama pull llama3.2:latest > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} llama3.2 ready" || echo -e "  ${YELLOW}⚠${NC} llama3.2 download failed (can retry later)"
+
+echo "  Pulling nomic-embed-text for embeddings..."
+$CONTAINER_CMD exec acms_ollama ollama pull nomic-embed-text > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} nomic-embed-text ready" || echo -e "  ${YELLOW}⚠${NC} nomic-embed-text download failed (can retry later)"
 
 echo ""
 
