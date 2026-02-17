@@ -15,12 +15,26 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from src.storage.models import Base
 
-# Database configuration from environment or defaults
-DB_HOST = os.getenv("ACMS_DB_HOST", "localhost")
-DB_PORT = int(os.getenv("ACMS_DB_PORT", "40432"))
-DB_NAME = os.getenv("ACMS_DB_NAME", "acms")
-DB_USER = os.getenv("ACMS_DB_USER", "acms")
-DB_PASSWORD = os.getenv("ACMS_DB_PASSWORD", "acms_password")
+# Database configuration from environment
+# Prefer DATABASE_URL, fallback to individual vars
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    # Parse from DATABASE_URL
+    # Format: postgresql://user:pass@host:port/db
+    from urllib.parse import urlparse
+    parsed = urlparse(DATABASE_URL)
+    DB_HOST = parsed.hostname or "localhost"
+    DB_PORT = parsed.port or 5432
+    DB_NAME = parsed.path.lstrip("/") or "acms"
+    DB_USER = parsed.username or "acms"
+    DB_PASSWORD = parsed.password or ""
+else:
+    # Fallback to individual env vars (for local development)
+    DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+    DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+    DB_NAME = os.getenv("POSTGRES_DB", "acms")
+    DB_USER = os.getenv("POSTGRES_USER", "acms")
+    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 
 # Connection pool settings
 MAX_POOL_SIZE = 20

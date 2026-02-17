@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 # Model metadata for autogenerate support
 target_metadata = Base.metadata
 
-# Database connection string from environment or config
+# Database connection string from environment
 # Use DATABASE_URL if available, otherwise construct from individual vars
 database_url = os.getenv("DATABASE_URL")
 if database_url:
@@ -31,12 +31,14 @@ if database_url:
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 else:
-    # Fallback to individual env vars (matching docker-compose)
+    # Fallback to individual env vars (no hardcoded defaults - must be set)
     DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
     DB_PORT = os.getenv("POSTGRES_PORT", "5432")
     DB_NAME = os.getenv("POSTGRES_DB", "acms")
     DB_USER = os.getenv("POSTGRES_USER", "acms")
-    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "acms_local_dev_2024")
+    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+    if not DB_PASSWORD:
+        raise ValueError("POSTGRES_PASSWORD or DATABASE_URL must be set")
     database_url = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 config.set_main_option("sqlalchemy.url", database_url)

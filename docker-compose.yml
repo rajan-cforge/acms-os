@@ -89,13 +89,6 @@ services:
       POSTGRES_USER: acms
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-acms_local_dev_2024}
 
-      # Database connection (ACMS-prefixed for src/storage/database.py)
-      ACMS_DB_HOST: postgres
-      ACMS_DB_PORT: 5432
-      ACMS_DB_NAME: acms
-      ACMS_DB_USER: acms
-      ACMS_DB_PASSWORD: acms_password
-
       # Redis connection
       REDIS_HOST: redis
       REDIS_PORT: 6379

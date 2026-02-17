@@ -217,10 +217,12 @@ async def topic_extraction_job(
             from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
             from sqlalchemy.orm import sessionmaker
 
-            db_url = os.getenv(
-                "DATABASE_URL",
-                "postgresql+asyncpg://acms:acms_password@localhost:40432/acms"
-            )
+            db_url = os.getenv("DATABASE_URL")
+            if not db_url:
+                raise ValueError("DATABASE_URL environment variable must be set")
+            # Ensure async driver
+            if db_url.startswith("postgresql://"):
+                db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
             engine = create_async_engine(db_url)
             async_session = sessionmaker(engine, class_=AsyncSession)
 
