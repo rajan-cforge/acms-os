@@ -82,7 +82,7 @@ services:
       - "40080:40080"
     environment:
       # Database connection (using service names for internal network)
-      DATABASE_URL: postgresql://acms:acms_password@postgres:5432/acms
+      DATABASE_URL: postgresql://acms:${POSTGRES_PASSWORD:-acms_local_dev_2024}@postgres:5432/acms
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: acms
