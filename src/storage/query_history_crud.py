@@ -53,34 +53,35 @@ async def save_query_to_history(
         query_id = uuid4()
 
     try:
+        # Build metadata with extra fields that aren't in the schema
+        full_metadata = metadata or {}
+        full_metadata["context_limit"] = context_limit
+        full_metadata["est_cost_usd"] = cost_usd
+
         async with get_session() as session:
             await session.execute(
                 text("""
                     INSERT INTO query_history (
-                        query_id, user_id, question, answer,
-                        response_source, from_cache, confidence,
-                        context_limit, est_cost_usd, total_latency_ms,
-                        metadata, created_at
+                        query_id, user_id, query_text, response_text,
+                        response_source, from_cache, confidence_score,
+                        latency_ms, metadata, created_at
                     )
                     VALUES (
-                        :query_id, :user_id, :question, :answer,
-                        :response_source, :from_cache, :confidence,
-                        :context_limit, :est_cost_usd, :total_latency_ms,
-                        :metadata, NOW()
+                        :query_id, :user_id, :query_text, :response_text,
+                        :response_source, :from_cache, :confidence_score,
+                        :latency_ms, :metadata, NOW()
                     )
                 """),
                 {
                     "query_id": str(query_id),
                     "user_id": user_id,
-                    "question": question,
-                    "answer": answer,
+                    "query_text": question,
+                    "response_text": answer,
                     "response_source": response_source,
                     "from_cache": from_cache,
-                    "confidence": confidence,
-                    "context_limit": context_limit,
-                    "est_cost_usd": cost_usd,
-                    "total_latency_ms": latency_ms,
-                    "metadata": json.dumps(metadata or {})  # Convert dict to JSON string
+                    "confidence_score": confidence,
+                    "latency_ms": float(latency_ms),
+                    "metadata": json.dumps(full_metadata)
                 }
             )
             await session.commit()
