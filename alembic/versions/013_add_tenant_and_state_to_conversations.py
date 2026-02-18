@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import JSON
 
 # revision identifiers, used by Alembic.
 revision = '013_add_tenant_state'
-down_revision = '012_add_nudges_and_feedback'
+down_revision = '012_add_nudges_feedback'
 branch_labels = None
 depends_on = None
 
