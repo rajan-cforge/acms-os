@@ -186,6 +186,78 @@ echo -e "${YELLOW}Running database migrations...${NC}"
 $CONTAINER_CMD exec acms_api alembic upgrade head 2>&1 | tail -5
 echo -e "  ${GREEN}✓${NC} Database migrations complete"
 
+# -----------------------------------------------------------------------------
+# Create Weaviate Collections
+# -----------------------------------------------------------------------------
+
+echo ""
+echo -e "${YELLOW}Setting up Weaviate collections...${NC}"
+
+# Wait for Weaviate to be ready
+sleep 3
+
+# Create ACMS_Raw_v1 collection (for raw Q&A storage)
+curl -s -X POST "http://localhost:40480/v1/schema" -H "Content-Type: application/json" -d '{
+  "class": "ACMS_Raw_v1",
+  "description": "Raw Q&A pairs with 30-day retention",
+  "vectorizer": "none",
+  "vectorIndexConfig": {"distance": "cosine"},
+  "properties": [
+    {"name": "query_hash", "dataType": ["text"]},
+    {"name": "query_text", "dataType": ["text"]},
+    {"name": "answer_text", "dataType": ["text"]},
+    {"name": "conversation_id", "dataType": ["text"]},
+    {"name": "agent_used", "dataType": ["text"]},
+    {"name": "cost_usd", "dataType": ["number"]},
+    {"name": "latency_ms", "dataType": ["int"]},
+    {"name": "user_feedback", "dataType": ["text"]},
+    {"name": "created_at", "dataType": ["date"]},
+    {"name": "user_id", "dataType": ["text"]}
+  ]
+}' > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} ACMS_Raw_v1 collection ready" || echo -e "  ${YELLOW}⚠${NC} ACMS_Raw_v1 already exists or failed"
+
+# Create ACMS_Knowledge_v2 collection (for knowledge extraction)
+curl -s -X POST "http://localhost:40480/v1/schema" -H "Content-Type: application/json" -d '{
+  "class": "ACMS_Knowledge_v2",
+  "description": "Structured knowledge entries",
+  "vectorizer": "none",
+  "vectorIndexConfig": {"distance": "cosine"},
+  "properties": [
+    {"name": "canonical_query", "dataType": ["text"]},
+    {"name": "answer_summary", "dataType": ["text"]},
+    {"name": "full_answer", "dataType": ["text"]},
+    {"name": "primary_intent", "dataType": ["text"]},
+    {"name": "problem_domain", "dataType": ["text"]},
+    {"name": "topic_cluster", "dataType": ["text"]},
+    {"name": "key_facts", "dataType": ["text[]"]},
+    {"name": "entities_json", "dataType": ["text"]},
+    {"name": "user_id", "dataType": ["text"]},
+    {"name": "source_query_id", "dataType": ["text"]},
+    {"name": "created_at", "dataType": ["text"]},
+    {"name": "extraction_confidence", "dataType": ["number"]}
+  ]
+}' > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} ACMS_Knowledge_v2 collection ready" || echo -e "  ${YELLOW}⚠${NC} ACMS_Knowledge_v2 already exists or failed"
+
+# Create ACMS_QualityCache_v1 collection (for quality cache)
+curl -s -X POST "http://localhost:40480/v1/schema" -H "Content-Type: application/json" -d '{
+  "class": "ACMS_QualityCache_v1",
+  "description": "Quality-validated cache entries",
+  "vectorizer": "none",
+  "vectorIndexConfig": {"distance": "cosine"},
+  "properties": [
+    {"name": "query_hash", "dataType": ["text"]},
+    {"name": "query_text", "dataType": ["text"]},
+    {"name": "answer_text", "dataType": ["text"]},
+    {"name": "quality_score", "dataType": ["number"]},
+    {"name": "feedback_count", "dataType": ["int"]},
+    {"name": "positive_feedback", "dataType": ["int"]},
+    {"name": "ttl_hours", "dataType": ["int"]},
+    {"name": "created_at", "dataType": ["date"]},
+    {"name": "last_accessed", "dataType": ["date"]},
+    {"name": "user_id", "dataType": ["text"]}
+  ]
+}' > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} ACMS_QualityCache_v1 collection ready" || echo -e "  ${YELLOW}⚠${NC} ACMS_QualityCache_v1 already exists or failed"
+
 echo ""
 
 # -----------------------------------------------------------------------------
