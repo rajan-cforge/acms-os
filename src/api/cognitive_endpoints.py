@@ -19,6 +19,9 @@ from pydantic import BaseModel
 
 from src.storage.database import get_db_pool
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api", tags=["Cognitive Architecture"])
 
 
@@ -145,17 +148,24 @@ class WeeklyDigestResponse(BaseModel):
 @router.get("/expertise", response_model=ExpertiseProfileResponse)
 async def get_expertise_profile():
     """Returns the user's expertise profile across all topics."""
-    pool = await get_db_pool()
+    try:
+        pool = await get_db_pool()
+    except Exception:
+        return ExpertiseProfileResponse(total_queries=0, topic_count=0, profile=[])
 
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT primary_topic, COUNT(*) as count
-            FROM topic_extractions
-            WHERE primary_topic IS NOT NULL
-              AND primary_topic NOT IN ('transient', '', 'general')
-            GROUP BY primary_topic
-            ORDER BY count DESC
-        """)
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT primary_topic, COUNT(*) as count
+                FROM topic_extractions
+                WHERE primary_topic IS NOT NULL
+                  AND primary_topic NOT IN ('transient', '', 'general')
+                GROUP BY primary_topic
+                ORDER BY count DESC
+            """)
+    except Exception as e:
+        logger.warning(f"[Cognitive] expertise query failed (table may not exist): {e}")
+        return ExpertiseProfileResponse(total_queries=0, topic_count=0, profile=[])
 
     if not rows:
         return ExpertiseProfileResponse(total_queries=0, topic_count=0, profile=[])
@@ -184,51 +194,54 @@ async def get_expertise_profile():
 @router.get("/knowledge-health", response_model=KnowledgeHealthResponse)
 async def get_knowledge_health():
     """Returns knowledge base health metrics."""
-    pool = await get_db_pool()
+    try:
+        pool = await get_db_pool()
+    except Exception:
+        return KnowledgeHealthResponse(total_entries=0, topics_covered=0, consistency_score=0.0, needs_review=0, last_compaction=None)
 
-    async with pool.acquire() as conn:
-        # Count total entries
-        total = await conn.fetchval("""
-            SELECT COUNT(*) FROM topic_extractions
-            WHERE primary_topic IS NOT NULL
-        """)
-
-        # Count topics
-        topic_count = await conn.fetchval("""
-            SELECT COUNT(DISTINCT primary_topic)
-            FROM topic_extractions
-            WHERE primary_topic IS NOT NULL
-              AND primary_topic NOT IN ('transient', '', 'general')
-        """)
-
-        # Count items needing review
-        try:
-            needs_review = await conn.fetchval("""
-                SELECT COUNT(*)
-                FROM knowledge_review_queue
-                WHERE status = 'pending'
-            """) or 0
-        except Exception:
-            needs_review = 0
-
-        # Check for last compaction (from job runs)
-        try:
-            last_compaction = await conn.fetchval("""
-                SELECT MAX(completed_at)
-                FROM scheduled_job_runs
-                WHERE job_name LIKE '%compaction%'
-                  AND status = 'success'
+    try:
+        async with pool.acquire() as conn:
+            total = await conn.fetchval("""
+                SELECT COUNT(*) FROM topic_extractions
+                WHERE primary_topic IS NOT NULL
             """)
-        except Exception:
-            last_compaction = None
 
-    return KnowledgeHealthResponse(
-        total_entries=total or 0,
-        topics_covered=topic_count or 0,
-        consistency_score=98.0,  # Could be calculated from cross_validation table
-        needs_review=needs_review,
-        last_compaction=last_compaction.isoformat() if last_compaction else None,
-    )
+            topic_count = await conn.fetchval("""
+                SELECT COUNT(DISTINCT primary_topic)
+                FROM topic_extractions
+                WHERE primary_topic IS NOT NULL
+                  AND primary_topic NOT IN ('transient', '', 'general')
+            """)
+
+            try:
+                needs_review = await conn.fetchval("""
+                    SELECT COUNT(*)
+                    FROM knowledge_review_queue
+                    WHERE status = 'pending'
+                """) or 0
+            except Exception:
+                needs_review = 0
+
+            try:
+                last_compaction = await conn.fetchval("""
+                    SELECT MAX(completed_at)
+                    FROM scheduled_job_runs
+                    WHERE job_name LIKE '%compaction%'
+                      AND status = 'success'
+                """)
+            except Exception:
+                last_compaction = None
+
+        return KnowledgeHealthResponse(
+            total_entries=total or 0,
+            topics_covered=topic_count or 0,
+            consistency_score=98.0,
+            needs_review=needs_review,
+            last_compaction=last_compaction.isoformat() if last_compaction else None,
+        )
+    except Exception as e:
+        logger.warning(f"[Cognitive] knowledge-health query failed: {e}")
+        return KnowledgeHealthResponse(total_entries=0, topics_covered=0, consistency_score=0.0, needs_review=0, last_compaction=None)
 
 
 @router.get("/discoveries", response_model=DiscoveriesResponse)
@@ -237,35 +250,41 @@ async def get_discoveries(
     status: Optional[str] = Query(default=None),
 ):
     """Returns cross-domain insights."""
-    pool = await get_db_pool()
+    try:
+        pool = await get_db_pool()
 
-    async with pool.acquire() as conn:
-        query = """
-            SELECT bridge, domain_a, domain_b, session_count,
-                   topics_involved, insight, creativity_score, status
-            FROM cross_domain_discoveries
-        """
-        if status:
-            query += f" WHERE status = '{status}'"
-        query += " ORDER BY session_count DESC LIMIT $1"
+        async with pool.acquire() as conn:
+            query = """
+                SELECT bridge, domain_a, domain_b, session_count,
+                       topics_involved, insight, creativity_score, status
+                FROM cross_domain_discoveries
+            """
+            if status:
+                query += " WHERE status = $2"
+                query += " ORDER BY session_count DESC LIMIT $1"
+                rows = await conn.fetch(query, limit, status)
+            else:
+                query += " ORDER BY session_count DESC LIMIT $1"
+                rows = await conn.fetch(query, limit)
 
-        rows = await conn.fetch(query, limit)
+        discoveries = [
+            DiscoveryItem(
+                bridge=row['bridge'],
+                domain_a=row['domain_a'],
+                domain_b=row['domain_b'],
+                session_count=row['session_count'],
+                topics_involved=row['topics_involved'] or [],
+                insight=row['insight'],
+                creativity_score=row['creativity_score'],
+                status=row['status'],
+            )
+            for row in rows
+        ]
 
-    discoveries = [
-        DiscoveryItem(
-            bridge=row['bridge'],
-            domain_a=row['domain_a'],
-            domain_b=row['domain_b'],
-            session_count=row['session_count'],
-            topics_involved=row['topics_involved'] or [],
-            insight=row['insight'],
-            creativity_score=row['creativity_score'],
-            status=row['status'],
-        )
-        for row in rows
-    ]
-
-    return DiscoveriesResponse(count=len(discoveries), discoveries=discoveries)
+        return DiscoveriesResponse(count=len(discoveries), discoveries=discoveries)
+    except Exception as e:
+        logger.warning(f"[Cognitive] discoveries query failed: {e}")
+        return DiscoveriesResponse(count=0, discoveries=[])
 
 
 @router.get("/associations/{topic}", response_model=AssociationsResponse)
@@ -275,163 +294,190 @@ async def get_associations(
     min_strength: float = Query(default=0.0),
 ):
     """Returns topics associated with the given topic via co-retrieval."""
-    pool = await get_db_pool()
+    try:
+        pool = await get_db_pool()
 
-    async with pool.acquire() as conn:
-        # Search both directions since edges are stored with alphabetical ordering
-        rows = await conn.fetch("""
-            SELECT
-                CASE WHEN item_a_id = $1 THEN item_b_id ELSE item_a_id END as related_topic,
-                strength,
-                co_retrieval_count
-            FROM coretrieval_edges
-            WHERE (item_a_id = $1 OR item_b_id = $1)
-              AND strength >= $2
-            ORDER BY strength DESC
-            LIMIT $3
-        """, topic, min_strength, limit)
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT
+                    CASE WHEN item_a_id = $1 THEN item_b_id ELSE item_a_id END as related_topic,
+                    strength,
+                    co_retrieval_count
+                FROM coretrieval_edges
+                WHERE (item_a_id = $1 OR item_b_id = $1)
+                  AND strength >= $2
+                ORDER BY strength DESC
+                LIMIT $3
+            """, topic, min_strength, limit)
 
-    associations = [
-        AssociationItem(
-            topic=row['related_topic'],
-            strength=round(row['strength'], 2),
-            co_retrieval_count=row['co_retrieval_count'],
-        )
-        for row in rows
-    ]
+        associations = [
+            AssociationItem(
+                topic=row['related_topic'],
+                strength=round(row['strength'], 2),
+                co_retrieval_count=row['co_retrieval_count'],
+            )
+            for row in rows
+        ]
 
-    return AssociationsResponse(topic=topic, associations=associations)
+        return AssociationsResponse(topic=topic, associations=associations)
+    except Exception as e:
+        logger.warning(f"[Cognitive] associations query failed: {e}")
+        return AssociationsResponse(topic=topic, associations=[])
 
 
 @router.get("/topic/{topic_slug}", response_model=TopicSummaryResponse)
 async def get_topic_detail(topic_slug: str):
     """Returns detailed topic summary including sample questions."""
-    pool = await get_db_pool()
+    try:
+        pool = await get_db_pool()
 
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT topic_slug, knowledge_depth, expertise_level,
-                   key_concepts, sample_questions,
-                   first_interaction, last_interaction, knowledge_gaps
-            FROM topic_summaries
-            WHERE topic_slug = $1
-        """, topic_slug)
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT topic_slug, knowledge_depth, expertise_level,
+                       key_concepts, sample_questions,
+                       first_interaction, last_interaction, knowledge_gaps
+                FROM topic_summaries
+                WHERE topic_slug = $1
+            """, topic_slug)
 
-    if not row:
+        if not row:
+            raise HTTPException(status_code=404, detail=f"No data for topic: {topic_slug}")
+
+        return TopicSummaryResponse(
+            topic_slug=row['topic_slug'],
+            knowledge_depth=row['knowledge_depth'],
+            expertise_level=row['expertise_level'],
+            key_concepts=row['key_concepts'] or [],
+            sample_questions=row['sample_questions'] or [],
+            first_interaction=row['first_interaction'].isoformat() if row['first_interaction'] else None,
+            last_interaction=row['last_interaction'].isoformat() if row['last_interaction'] else None,
+            knowledge_gaps=row['knowledge_gaps'] or [],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"[Cognitive] topic detail query failed: {e}")
         raise HTTPException(status_code=404, detail=f"No data for topic: {topic_slug}")
-
-    return TopicSummaryResponse(
-        topic_slug=row['topic_slug'],
-        knowledge_depth=row['knowledge_depth'],
-        expertise_level=row['expertise_level'],
-        key_concepts=row['key_concepts'] or [],
-        sample_questions=row['sample_questions'] or [],
-        first_interaction=row['first_interaction'].isoformat() if row['first_interaction'] else None,
-        last_interaction=row['last_interaction'].isoformat() if row['last_interaction'] else None,
-        knowledge_gaps=row['knowledge_gaps'] or [],
-    )
 
 
 @router.get("/digest/weekly", response_model=WeeklyDigestResponse)
 async def get_weekly_digest():
     """Returns the weekly cognitive digest data."""
-    pool = await get_db_pool()
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
 
-    async with pool.acquire() as conn:
-        # This week's activity
-        interactions = await conn.fetchval("""
-            SELECT COUNT(*)
-            FROM query_history
-            WHERE created_at >= $1
-        """, week_ago)
-
-        # Unique topics this week
-        topics_active = await conn.fetchval("""
-            SELECT COUNT(DISTINCT primary_topic)
-            FROM topic_extractions te
-            JOIN query_history qh ON qh.query_id = te.source_id
-                AND te.source_type = 'query_history'
-            WHERE qh.created_at >= $1
-              AND te.primary_topic IS NOT NULL
-        """, week_ago)
-
-        # New topics (first seen this week)
-        new_topics = await conn.fetch("""
-            SELECT ts.topic_slug
-            FROM topic_summaries ts
-            WHERE ts.first_interaction >= $1
-            ORDER BY ts.knowledge_depth DESC
-            LIMIT 5
-        """, week_ago)
-
-        # Top topics this week
-        top_topics = await conn.fetch("""
-            SELECT te.primary_topic, COUNT(*) as count
-            FROM topic_extractions te
-            JOIN query_history qh ON qh.query_id = te.source_id
-                AND te.source_type = 'query_history'
-            WHERE qh.created_at >= $1
-              AND te.primary_topic IS NOT NULL
-              AND te.primary_topic NOT IN ('transient', '', 'general')
-            GROUP BY te.primary_topic
-            ORDER BY count DESC
-            LIMIT 10
-        """, week_ago)
-
-        # Recent discoveries
-        discoveries = await conn.fetch("""
-            SELECT bridge, domain_a, domain_b, session_count,
-                   topics_involved, insight, creativity_score, status
-            FROM cross_domain_discoveries
-            WHERE status = 'confirmed'
-            ORDER BY session_count DESC
-            LIMIT 5
-        """)
-
-    # Calculate total for relative share
-    total = sum(t['count'] for t in top_topics)
-
-    top_topics_list = [
-        TopicExpertise(
-            topic=t['primary_topic'],
-            depth=t['count'],
-            level=determine_expertise_level(t['count'], total),
-            relative_share=round(t['count'] / total * 100, 1) if total > 0 else 0,
-            domain=DOMAIN_MAP.get(t['primary_topic'].lower(), 'other'),
+    try:
+        pool = await get_db_pool()
+    except Exception:
+        return WeeklyDigestResponse(
+            period_start=week_ago.isoformat(), period_end=now.isoformat(),
+            stats=WeeklyDigestStats(interactions=0, topics_active=0, new_topics=[]),
+            top_topics=[], discoveries=[],
+            health=KnowledgeHealthResponse(total_entries=0, topics_covered=0, consistency_score=0.0, needs_review=0, last_compaction=None),
         )
-        for t in top_topics
-    ]
 
-    discoveries_list = [
-        DiscoveryItem(
-            bridge=row['bridge'],
-            domain_a=row['domain_a'],
-            domain_b=row['domain_b'],
-            session_count=row['session_count'],
-            topics_involved=row['topics_involved'] or [],
-            insight=row['insight'],
-            creativity_score=row['creativity_score'],
-            status=row['status'],
+    try:
+        async with pool.acquire() as conn:
+            # This week's activity
+            interactions = await conn.fetchval("""
+                SELECT COUNT(*)
+                FROM query_history
+                WHERE created_at >= $1
+            """, week_ago)
+
+            # Unique topics this week
+            topics_active = await conn.fetchval("""
+                SELECT COUNT(DISTINCT primary_topic)
+                FROM topic_extractions te
+                JOIN query_history qh ON qh.query_id = te.source_id
+                    AND te.source_type = 'query_history'
+                WHERE qh.created_at >= $1
+                  AND te.primary_topic IS NOT NULL
+            """, week_ago)
+
+            # New topics (first seen this week)
+            new_topics = await conn.fetch("""
+                SELECT ts.topic_slug
+                FROM topic_summaries ts
+                WHERE ts.first_interaction >= $1
+                ORDER BY ts.knowledge_depth DESC
+                LIMIT 5
+            """, week_ago)
+
+            # Top topics this week
+            top_topics = await conn.fetch("""
+                SELECT te.primary_topic, COUNT(*) as count
+                FROM topic_extractions te
+                JOIN query_history qh ON qh.query_id = te.source_id
+                    AND te.source_type = 'query_history'
+                WHERE qh.created_at >= $1
+                  AND te.primary_topic IS NOT NULL
+                  AND te.primary_topic NOT IN ('transient', '', 'general')
+                GROUP BY te.primary_topic
+                ORDER BY count DESC
+                LIMIT 10
+            """, week_ago)
+
+            # Recent discoveries
+            discoveries = await conn.fetch("""
+                SELECT bridge, domain_a, domain_b, session_count,
+                       topics_involved, insight, creativity_score, status
+                FROM cross_domain_discoveries
+                WHERE status = 'confirmed'
+                ORDER BY session_count DESC
+                LIMIT 5
+            """)
+
+        # Calculate total for relative share
+        total = sum(t['count'] for t in top_topics)
+
+        top_topics_list = [
+            TopicExpertise(
+                topic=t['primary_topic'],
+                depth=t['count'],
+                level=determine_expertise_level(t['count'], total),
+                relative_share=round(t['count'] / total * 100, 1) if total > 0 else 0,
+                domain=DOMAIN_MAP.get(t['primary_topic'].lower(), 'other'),
+            )
+            for t in top_topics
+        ]
+
+        discoveries_list = [
+            DiscoveryItem(
+                bridge=row['bridge'],
+                domain_a=row['domain_a'],
+                domain_b=row['domain_b'],
+                session_count=row['session_count'],
+                topics_involved=row['topics_involved'] or [],
+                insight=row['insight'],
+                creativity_score=row['creativity_score'],
+                status=row['status'],
+            )
+            for row in discoveries
+        ]
+
+        health = await get_knowledge_health()
+
+        return WeeklyDigestResponse(
+            period_start=week_ago.isoformat(),
+            period_end=now.isoformat(),
+            stats=WeeklyDigestStats(
+                interactions=interactions or 0,
+                topics_active=topics_active or 0,
+                new_topics=[t['topic_slug'] for t in new_topics],
+            ),
+            top_topics=top_topics_list,
+            discoveries=discoveries_list,
+            health=health,
         )
-        for row in discoveries
-    ]
-
-    health = await get_knowledge_health()
-
-    return WeeklyDigestResponse(
-        period_start=week_ago.isoformat(),
-        period_end=now.isoformat(),
-        stats=WeeklyDigestStats(
-            interactions=interactions or 0,
-            topics_active=topics_active or 0,
-            new_topics=[t['topic_slug'] for t in new_topics],
-        ),
-        top_topics=top_topics_list,
-        discoveries=discoveries_list,
-        health=health,
-    )
+    except Exception as e:
+        logger.warning(f"[Cognitive] weekly digest query failed: {e}")
+        return WeeklyDigestResponse(
+            period_start=week_ago.isoformat(), period_end=now.isoformat(),
+            stats=WeeklyDigestStats(interactions=0, topics_active=0, new_topics=[]),
+            top_topics=[], discoveries=[],
+            health=KnowledgeHealthResponse(total_entries=0, topics_covered=0, consistency_score=0.0, needs_review=0, last_compaction=None),
+        )
 
 
 @router.post("/schema-context")

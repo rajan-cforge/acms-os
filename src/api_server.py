@@ -123,10 +123,56 @@ app.include_router(reports_router)
 app.include_router(cognitive_router)
 
 # Initialize MemoryCRUD, Query Cache, Semantic Cache, and Gateway Orchestrator
-crud = MemoryCRUD()
-query_cache = QueryCache()
-semantic_cache = get_semantic_cache()
-gateway = get_gateway_orchestrator()
+# Wrapped in try/except for fresh installs where Weaviate may not be ready yet
+crud = None
+query_cache = None
+semantic_cache = None
+gateway = None
+
+try:
+    crud = MemoryCRUD()
+except Exception as e:
+    logger.warning(f"[Startup] MemoryCRUD init deferred (Weaviate may not be ready): {e}")
+
+try:
+    query_cache = QueryCache()
+except Exception as e:
+    logger.warning(f"[Startup] QueryCache init deferred: {e}")
+
+try:
+    semantic_cache = get_semantic_cache()
+except Exception as e:
+    logger.warning(f"[Startup] SemanticCache init deferred (Weaviate may not be ready): {e}")
+
+try:
+    gateway = get_gateway_orchestrator()
+except Exception as e:
+    logger.warning(f"[Startup] Gateway orchestrator init deferred (Weaviate may not be ready): {e}")
+
+
+def _ensure_initialized():
+    """Lazy-initialize components that failed at startup (e.g. Weaviate wasn't ready)."""
+    global crud, query_cache, semantic_cache, gateway
+    if crud is None:
+        try:
+            crud = MemoryCRUD()
+        except Exception:
+            raise HTTPException(status_code=503, detail="Memory service not ready. Weaviate may still be starting.")
+    if query_cache is None:
+        try:
+            query_cache = QueryCache()
+        except Exception:
+            pass  # Non-critical
+    if semantic_cache is None:
+        try:
+            semantic_cache = get_semantic_cache()
+        except Exception:
+            pass  # Non-critical
+    if gateway is None:
+        try:
+            gateway = get_gateway_orchestrator()
+        except Exception:
+            raise HTTPException(status_code=503, detail="Gateway not ready. Weaviate may still be starting.")
 
 # Initialize Claude generator (optional - only if ANTHROPIC_API_KEY is set)
 claude = None
@@ -968,6 +1014,7 @@ async def get_job_runs(
 @app.get("/memories/count")
 async def get_memory_count():
     """Get total memory count for default user."""
+    _ensure_initialized()
     user_id = await get_or_create_default_user()
 
     # Count memories from database
@@ -991,6 +1038,7 @@ async def list_memories(
     source: Optional[str] = Query(default=None, description="Filter by source (github, chatgpt, gemini, claude, slack, chrome)"),
 ):
     """List memories with optional filters."""
+    _ensure_initialized()
     user_id = await get_or_create_default_user()
 
     memories = await crud.list_memories(
@@ -1705,6 +1753,7 @@ async def get_report(
 @app.post("/search")
 async def search_memories(search_request: SearchRequest):
     """Semantic search for memories."""
+    _ensure_initialized()
     user_id = await get_or_create_default_user()
 
     results = await crud.search_memories(
@@ -1740,6 +1789,7 @@ async def ask_question(request: AskRequest):
     8. Store result in semantic cache
     9. Return answer with source citations + query_id + response_source + analytics
     """
+    _ensure_initialized()
     import time
     request_start = time.time()
 

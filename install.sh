@@ -79,12 +79,18 @@ if ! $CONTAINER_CMD info &> /dev/null; then
 fi
 echo -e "  ${GREEN}✓${NC} Docker daemon running"
 
-# Check available memory
-AVAILABLE_MEM=$(free -g 2>/dev/null | awk '/^Mem:/{print $7}' || echo "8")
-if [ "$AVAILABLE_MEM" -lt 4 ]; then
-    echo -e "  ${YELLOW}⚠${NC} Low memory warning: ${AVAILABLE_MEM}GB available (8GB+ recommended)"
+# Check available memory (cross-platform)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: use sysctl for total physical memory (in GB)
+    TOTAL_MEM=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%d", $1/1073741824}')
 else
-    echo -e "  ${GREEN}✓${NC} Memory: ${AVAILABLE_MEM}GB available"
+    # Linux: use free
+    TOTAL_MEM=$(free -g 2>/dev/null | awk '/^Mem:/{print $2}' || echo "8")
+fi
+if [ "$TOTAL_MEM" -lt 8 ]; then
+    echo -e "  ${YELLOW}⚠${NC} Low memory warning: ${TOTAL_MEM}GB total (8GB+ recommended)"
+else
+    echo -e "  ${GREEN}✓${NC} Memory: ${TOTAL_MEM}GB total"
 fi
 
 echo ""
@@ -149,6 +155,9 @@ echo -e "${YELLOW}Starting ACMS services...${NC}"
 echo "  This may take a few minutes on first run (downloading images)..."
 echo ""
 
+# Determine container name prefix (matches docker-compose.yml)
+ACMS_PREFIX="${ACMS_PREFIX:-acms}"
+
 $COMPOSE_CMD up -d
 
 echo ""
@@ -183,7 +192,7 @@ echo ""
 # -----------------------------------------------------------------------------
 
 echo -e "${YELLOW}Running database migrations...${NC}"
-$CONTAINER_CMD exec acms_api alembic upgrade head 2>&1 | tail -5
+$CONTAINER_CMD exec ${ACMS_PREFIX}_api alembic upgrade head 2>&1 | tail -5
 echo -e "  ${GREEN}✓${NC} Database migrations complete"
 
 # -----------------------------------------------------------------------------
@@ -258,6 +267,24 @@ curl -s -X POST "http://localhost:40480/v1/schema" -H "Content-Type: application
   ]
 }' > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} ACMS_QualityCache_v1 collection ready" || echo -e "  ${YELLOW}⚠${NC} ACMS_QualityCache_v1 already exists or failed"
 
+# Create ACMS_Insights_v1 collection (for cross-source insights)
+curl -s -X POST "http://localhost:40480/v1/schema" -H "Content-Type: application/json" -d '{
+  "class": "ACMS_Insights_v1",
+  "description": "Cross-source unified insights",
+  "vectorizer": "none",
+  "vectorIndexConfig": {"distance": "cosine"},
+  "properties": [
+    {"name": "insight_text", "dataType": ["text"]},
+    {"name": "insight_type", "dataType": ["text"]},
+    {"name": "source_type", "dataType": ["text"]},
+    {"name": "confidence", "dataType": ["number"]},
+    {"name": "topic", "dataType": ["text"]},
+    {"name": "user_id", "dataType": ["text"]},
+    {"name": "created_at", "dataType": ["date"]},
+    {"name": "metadata_json", "dataType": ["text"]}
+  ]
+}' > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} ACMS_Insights_v1 collection ready" || echo -e "  ${YELLOW}⚠${NC} ACMS_Insights_v1 already exists or failed"
+
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -265,7 +292,7 @@ echo ""
 # -----------------------------------------------------------------------------
 
 echo -e "${YELLOW}Setting up default user...${NC}"
-$CONTAINER_CMD exec acms_postgres psql -U acms -d acms -c "INSERT INTO users (user_id, username, email, display_name, is_active, is_admin) VALUES (gen_random_uuid(), 'default', 'default@acms.local', 'Default User', true, true) ON CONFLICT (email) DO NOTHING;" > /dev/null 2>&1
+$CONTAINER_CMD exec ${ACMS_PREFIX}_postgres psql -U acms -d acms -c "INSERT INTO users (user_id, username, email, display_name, is_active, is_admin) VALUES (gen_random_uuid(), 'default', 'default@acms.local', 'Default User', true, true) ON CONFLICT (email) DO NOTHING;" > /dev/null 2>&1
 echo -e "  ${GREEN}✓${NC} Default user ready (default@acms.local)"
 
 echo ""
@@ -276,10 +303,10 @@ echo ""
 
 echo -e "${YELLOW}Downloading Ollama models (this may take a few minutes)...${NC}"
 echo "  Pulling llama3.2 for chat..."
-$CONTAINER_CMD exec acms_ollama ollama pull llama3.2:latest > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} llama3.2 ready" || echo -e "  ${YELLOW}⚠${NC} llama3.2 download failed (can retry later)"
+$CONTAINER_CMD exec ${ACMS_PREFIX}_ollama ollama pull llama3.2:latest > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} llama3.2 ready" || echo -e "  ${YELLOW}⚠${NC} llama3.2 download failed (can retry later)"
 
 echo "  Pulling nomic-embed-text for embeddings..."
-$CONTAINER_CMD exec acms_ollama ollama pull nomic-embed-text > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} nomic-embed-text ready" || echo -e "  ${YELLOW}⚠${NC} nomic-embed-text download failed (can retry later)"
+$CONTAINER_CMD exec ${ACMS_PREFIX}_ollama ollama pull nomic-embed-text > /dev/null 2>&1 && echo -e "  ${GREEN}✓${NC} nomic-embed-text ready" || echo -e "  ${YELLOW}⚠${NC} nomic-embed-text download failed (can retry later)"
 
 echo ""
 
